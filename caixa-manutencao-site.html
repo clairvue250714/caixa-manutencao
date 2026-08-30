@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caja Mantenimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<!-- ============================================================
+     FIREBASE — banco de dados compartilhado
+     PASSO 1) Crie um projeto grátis em https://console.firebase.google.com
+     PASSO 2) Ative "Firestore Database" (modo produção, região próxima)
+     PASSO 3) Ative "Authentication" > método "Anônimo" (Anonymous) — é só isso por
+              enquanto, não precisa criar contas nem senhas ainda.
+     PASSO 4) Em Configurações do projeto > Geral > "Seus apps" > Web (</>),
+              copie o objeto de configuração e cole no lugar do exemplo abaixo.
+     PASSO 5) Em Firestore > Regras, cole a versão "SEM SENHA" abaixo por enquanto.
+
+     ---- REGRAS SEM SENHA (usar agora) ----
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /caixa_manutencao/{id} {
+              allow read, write: if request.auth != null;
+              match /privado/{doc} { allow read, write: if request.auth != null; }
+            }
+            match /caixa_aluguel_geral/{id} {
+              allow read, write: if request.auth != null;
+              match /privado/{doc} { allow read, write: if request.auth != null; }
+            }
+            match /caixa_aluguel_luz/{id} {
+              allow read, write: if request.auth != null;
+              match /privado/{doc} { allow read, write: if request.auth != null; }
+            }
+            match /caixa_aluguel_imposto/{id} {
+              allow read, write: if request.auth != null;
+              match /privado/{doc} { allow read, write: if request.auth != null; }
+            }
+            match /caixa_aluguel_emergencia/{id} {
+              allow read, write: if request.auth != null;
+              match /privado/{doc} { allow read, write: if request.auth != null; }
+            }
+            match /colaboradores/{id} {
+              allow read, write: if request.auth != null;
+            }
+          }
+        }
+     ⚠ Nesta fase, qualquer pessoa que entrar (ADM ou MEMBRO) consegue tecnicamente
+     acessar tudo no banco de dados se forçar a mão — a separação ADM/MEMBRO é só
+     de tela. Bom pra testar, não pra usar de verdade com gente de fora.
+
+     ---- REGRAS COM SENHA (trocar para esta quando ativarmos login) ----
+     Nesse momento também: ative "Authentication" > método "E-mail/senha" e crie
+     duas contas — admin@caixa-manutencao.local e membro@caixa-manutencao.local —
+     cada uma com a senha que você quiser. Depois troque as regras do Firestore por:
+
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            function souAdmin() {
+              return request.auth != null && request.auth.token.email == 'admin@caixa-manutencao.local';
+            }
+            match /caixa_manutencao/{id} {
+              allow read: if request.auth != null;
+              allow create, update, delete: if souAdmin();
+              match /privado/{doc} { allow read, write: if souAdmin(); }
+            }
+            match /caixa_aluguel_geral/{id} {
+              allow read: if request.auth != null;
+              allow create, update, delete: if souAdmin();
+              match /privado/{doc} { allow read, write: if souAdmin(); }
+            }
+            match /caixa_aluguel_luz/{id} {
+              allow read: if request.auth != null;
+              allow create, update, delete: if souAdmin();
+              match /privado/{doc} { allow read, write: if souAdmin(); }
+            }
+            match /caixa_aluguel_imposto/{id} {
+              allow read: if request.auth != null;
+              allow create, update, delete: if souAdmin();
+              match /privado/{doc} { allow read, write: if souAdmin(); }
+            }
+            match /caixa_aluguel_emergencia/{id} {
+              allow read: if request.auth != null;
+              allow create, update, delete: if souAdmin();
+              match /privado/{doc} { allow read, write: if souAdmin(); }
+            }
+            match /colaboradores/{id} {
+              allow read: if request.auth != null;
+              allow write: if souAdmin();
+            }
+          }
+        }
+     ============================================================ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyDinzn81dINlUoSqjCBszM3xn_EAL2e5Cg",
+    authDomain: "adm-lumisial.firebaseapp.com",
+    projectId: "adm-lumisial",
+    storageBucket: "adm-lumisial.firebasestorage.app",
+    messagingSenderId: "886784675354",
+    appId: "1:886784675354:web:df914c1e7e52486b0a8ba3"
+  };
+  const ADMIN_EMAIL = 'admin@caixa-manutencao.local';
+  const MEMBER_EMAIL = 'membro@caixa-manutencao.local';
+</script>
+
+<style>
+  :root{
+    --ledger-green: #1B4332;
+    --ledger-green-dark: #12302A;
+    --kraft: #EFE6D0;
+    --kraft-dark: #E1D4B2;
+    --paper: #FBF7EC;
+    --ink: #23241F;
+    --ink-soft: #5C5A4E;
+    --stamp-red: #A93A2E;
+    --gold: #9C7A28;
+    --line: #C9BC98;
+    --shadow: 0 6px 18px rgba(27,67,50,0.14);
+    --radius: 3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--kraft);
+    background-image: radial-gradient(circle at 1px 1px, rgba(27,67,50,0.06) 1px, transparent 0);
+    background-size: 18px 18px;
+    color: var(--ink);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding-bottom: 96px;
+  }
+
+  .login-screen{ min-height: 100vh; display:flex; align-items:center; justify-content:center; padding: 24px; }
+  .login-card{ background: var(--paper); border-radius: 4px; box-shadow: var(--shadow); padding: 30px 26px;
+    width: min(360px, 100%); text-align:center; border: 1px solid var(--kraft-dark); }
+  .login-card .stamp-logo{ width: 58px; height:58px; border-radius:50%; border: 2.5px solid var(--ledger-green);
+    display:flex; align-items:center; justify-content:center; margin: 0 auto 14px; transform: rotate(-8deg);
+    font-family:'Fraunces', serif; font-size: 11px; line-height:1.15; color: var(--ledger-green); }
+  .login-card h2{ font-family:'Fraunces', serif; margin: 0 0 4px; color: var(--ledger-green-dark); font-size: 21px; }
+  .login-card p{ font-size: 13px; color: var(--ink-soft); margin: 0 0 20px; }
+  .login-role-row{ display:flex; gap:8px; margin-bottom: 14px; }
+  .role-btn{ flex:1; padding: 11px 10px; border-radius: 999px; border: 1.5px solid var(--ledger-green);
+    background: var(--paper); color: var(--ledger-green-dark); font-weight:600; font-size: 12.5px; cursor:pointer;
+    font-family:'Inter', sans-serif; }
+  .role-btn.selected{ background: var(--ledger-green); color: var(--paper); }
+  #loginPasswordArea{ display:none; text-align:left; }
+  #loginPasswordArea label{ font-size: 11px; text-transform:uppercase; letter-spacing:.06em; color: var(--ink-soft); font-weight:600; }
+  #loginPassword{ width:100%; font-size: 15px; padding: 10px; border: 1.5px solid var(--line); border-radius: 6px;
+    margin: 6px 0 12px; outline:none; font-family:'Inter', sans-serif; }
+  #loginPassword:focus{ border-color: var(--ledger-green); }
+  .login-submit{ width:100%; padding: 11px; border-radius: 999px; border:none; background: var(--stamp-red);
+    color: var(--paper); font-family:'Fraunces', serif; font-weight:600; font-size: 14px; text-transform:uppercase;
+    letter-spacing:.05em; cursor:pointer; }
+  .login-submit:disabled{ opacity:.5; cursor:not-allowed; }
+  #loginError{ color: var(--stamp-red); font-size: 12.5px; margin-top: 10px; min-height:0; }
+  .login-setup-note{ font-size: 12.5px; color: #5A4413; margin-top: 18px; line-height:1.5; text-align:left;
+    background: #FFF3D6; border: 1.5px solid var(--gold); border-radius: var(--radius); padding: 12px 14px; }
+
+  .topbar{ background: var(--ledger-green); color: var(--paper); padding: 22px 20px 26px; position: relative; overflow: hidden; }
+  .topbar::after{ content:""; position:absolute; left:0; right:0; bottom:0; height: 8px;
+    background: repeating-linear-gradient(90deg, var(--kraft) 0 8px, transparent 8px 16px); }
+  .topbar-inner{ max-width: 760px; margin: 0 auto; display:flex; align-items:center; gap: 16px; flex-wrap:wrap; }
+  .stamp-logo{ width: 52px; height:52px; flex:none; border-radius:50%; border: 2.5px solid var(--kraft);
+    display:flex; align-items:center; justify-content:center; transform: rotate(-8deg);
+    font-family:'Fraunces', serif; font-size: 10.5px; letter-spacing: 0.05em; text-align:center; line-height:1.15; opacity:0.92; }
+  .topbar h1{ font-family:'Fraunces', serif; font-weight:600; font-size: 26px; margin:0; letter-spacing: 0.01em; }
+  .topbar p{ margin: 4px 0 0; font-size: 13px; color: var(--kraft-dark); font-weight:400; }
+  .topbar-right{ margin-left:auto; display:flex; align-items:center; gap:10px; flex:none; }
+  .role-badge{ font-size: 10.5px; padding: 3px 10px; border-radius: 999px; font-weight:600; background: rgba(233,223,192,0.25); color: var(--kraft-dark); }
+  .role-badge.admin{ background: rgba(169,58,46,0.35); color: #F3D2CC; }
+  .logout-link{ font-size: 11px; color: var(--kraft-dark); text-decoration: underline; cursor:pointer; background:none; border:none; }
+  .wrap{ max-width: 760px; margin: 0 auto; padding: 22px 16px 0; }
+
+  .setup-banner{ background: #FFF3D6; border: 1.5px solid var(--gold); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 18px; font-size: 13px; color: #5A4413; line-height:1.5; }
+
+  .meta-banner{ background: #FFF3D6; border: 1.5px solid var(--gold); border-radius: var(--radius);
+    padding: 11px 16px; margin-bottom: 16px; font-size: 13px; color: #5A4413; font-weight:600;
+    display:flex; align-items:center; gap: 8px; }
+  .meta-banner b{ font-family:'IBM Plex Mono', monospace; }
+
+  .saldo-card{ background: var(--ledger-green-dark); color: var(--paper); border-radius: var(--radius);
+    padding: 16px 20px; display:flex; align-items:center; justify-content: space-between; box-shadow: var(--shadow); margin-bottom: 18px; }
+  .saldo-label{ font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--kraft-dark); }
+  .saldo-sub{ font-size: 11px; color: var(--kraft-dark); opacity:0.8; margin-top:3px; }
+  .saldo-value{ font-family:'IBM Plex Mono', monospace; font-size: 26px; font-weight:600; }
+  .saldo-value.negative{ color: #E6A79B; }
+
+  .report-actions-row{ display:flex; gap:8px; margin-bottom: 14px; flex-wrap:wrap; }
+  .report-btn{ flex:1; min-width: 160px; padding:9px 12px; border-radius:999px; border:1.5px solid var(--ledger-green);
+    background: var(--paper); color: var(--ledger-green-dark); font-weight:600; font-size:12.5px; cursor:pointer;
+    font-family:'Inter', sans-serif; }
+  .report-btn:hover{ background: var(--kraft); }
+  .report-btn.public{ border-color: var(--gold); color: var(--gold); }
+
+  .caixa-tabs{ display:flex; gap: 6px; margin: 16px auto 0; max-width: 760px; padding: 0 16px 4px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width: thin; }
+  .caixa-tab{ flex:0 0 auto; white-space:nowrap; padding: 10px 14px; border-radius: 999px; border: none; background: rgba(255,255,255,0.14);
+    color: var(--kraft-dark); font-family:'Fraunces', serif; font-weight:600; font-size: 12.5px; cursor:pointer;
+    text-transform: uppercase; letter-spacing: 0.03em; transition: all .15s ease; }
+  .caixa-tab.active{ background: var(--paper); color: var(--ledger-green-dark); }
+
+  .caixa-subtabs{ display:flex; gap: 6px; margin: 8px auto 0; max-width: 760px; padding: 0 16px 4px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width: thin; }
+  .caixa-subtab{ flex:0 0 auto; white-space:nowrap; padding: 8px 12px; border-radius: 999px;
+    border: 1.5px solid var(--kraft-dark); background: var(--paper); color: var(--ink-soft);
+    font-family:'Inter', sans-serif; font-weight:600; font-size: 12px; cursor:pointer; transition: all .15s ease; }
+  .caixa-subtab.active{ background: var(--ledger-green); border-color: var(--ledger-green); color: var(--paper); }
+
+  .top-actions{ display:flex; justify-content:flex-end; margin-bottom: 8px; }
+  .reset-link{ font-size: 11.5px; color: var(--kraft-dark); text-decoration: underline; cursor:pointer; background:none; border:none; }
+
+  .tabs{ display:flex; gap: 6px; margin-bottom: 12px; }
+  .tab-btn{ flex:1; padding: 10px 12px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--kraft);
+    color: var(--ink-soft); font-family:'Inter', sans-serif; font-weight:600; font-size: 13.5px; cursor:pointer; transition: all .15s ease; }
+  .tab-btn.active[data-tipo="entrada"]{ background: #2D6A4F; border-color: #2D6A4F; color: var(--paper); }
+  .tab-btn.active[data-tipo="saida"]{ background: var(--stamp-red); border-color: var(--stamp-red); color: var(--paper); }
+
+  .slip{ background: var(--paper); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 20px 18px;
+    position: relative; border: 1px solid var(--kraft-dark); border-left: 4px solid #2D6A4F; }
+  .slip.tipo-saida{ border-left-color: var(--stamp-red); }
+  .slip h2{ font-family:'Fraunces', serif; font-size: 15px; font-weight:600; margin: 0 0 14px;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--ledger-green-dark); }
+  .field-row{ display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight:600; }
+  .field input[type=text], .field input[type=date], .field textarea{
+    font-family:'Inter', sans-serif; font-size: 15px; padding: 9px 10px; border: none;
+    border-bottom: 1.5px solid var(--line); background: transparent; color: var(--ink); outline: none;
+    width:100%; resize: vertical; }
+  .field textarea{ font-size: 14px; min-height: 44px; font-family: 'Inter', sans-serif; }
+  .field input:focus, .field textarea:focus{ border-bottom-color: var(--ledger-green); }
+  .field.valor input{ font-family:'IBM Plex Mono', monospace; font-weight:500; }
+
+  .photo-drop-area{ margin-bottom: 14px; }
+  .photo-empty{ border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 14px; text-align:center; background: rgba(233,223,192,0.35); }
+  .photo-empty-label{ font-size: 13px; color: var(--ink-soft); display:block; margin-bottom: 10px; }
+  .photo-btn-row{ display:flex; gap: 8px; flex-wrap: wrap; }
+  .photo-btn{ flex:1; min-width: 130px; padding: 9px 10px; border-radius: 999px; border: 1.5px solid var(--ledger-green);
+    background: var(--ledger-green); color: var(--paper); font-family:'Inter', sans-serif; font-weight:600; font-size: 12.5px; cursor:pointer; }
+  .photo-btn.secondary{ background: var(--paper); color: var(--ledger-green-dark); }
+  .photo-filled{ border: 1.5px solid var(--ledger-green); border-radius: var(--radius); padding: 10px 12px;
+    display:flex; align-items:center; gap:10px; background: rgba(233,223,192,0.35); }
+  .photo-filled img{ width: 40px; height:40px; object-fit:cover; border-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); flex:none; }
+  .photo-filled .photo-filled-label{ flex:1; font-size: 13px; color: var(--ink-soft); }
+  .photo-filled .remove-photo{ color: var(--stamp-red); font-weight:600; font-size:12px; text-decoration: underline; cursor:pointer; background:none; border:none; }
+
+  .add-btn{ width:100%; color: var(--paper); border:none; border-radius: 999px; padding: 12px 16px;
+    font-family:'Fraunces', serif; font-weight:600; font-size: 15px; letter-spacing: 0.05em; text-transform: uppercase;
+    cursor:pointer; box-shadow: 0 3px 0 rgba(0,0,0,0.18); background: #2D6A4F; }
+  .add-btn.tipo-saida{ background: var(--stamp-red); }
+  .add-btn:active{ transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.18); }
+  .add-btn:disabled{ opacity:0.5; cursor:not-allowed; }
+  .form-error{ color: var(--stamp-red); font-size:12.5px; margin: -4px 0 10px; min-height: 0; }
+
+  .toolbar{ display:flex; align-items:center; gap: 10px; margin: 26px 0 10px; }
+  .toolbar h2{ font-family:'Fraunces', serif; font-size: 15px; font-weight:600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ledger-green-dark); margin:0; flex:none; }
+  .toolbar .rule{ flex:1; height:1px; background: var(--line); }
+  .search-input{ font-family:'Inter', sans-serif; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line);
+    border-radius: 999px; background: var(--paper); outline:none; width: 150px; }
+
+  .empty-state{ text-align:center; padding: 40px 20px; color: var(--ink-soft); font-size: 14px; }
+  .empty-state .stamp-outline{ width:64px;height:64px; border-radius:50%; border:2px dashed var(--line); margin: 0 auto 14px;
+    display:flex; align-items:center; justify-content:center; font-size: 26px; transform: rotate(-6deg); }
+
+  .entry{ background: var(--paper); border: 1px solid var(--kraft-dark); border-radius: var(--radius); padding: 13px 14px;
+    margin-bottom: 10px; display:flex; gap: 12px; align-items:flex-start; box-shadow: 0 1px 3px rgba(27,67,50,0.06);
+    border-left: 4px solid #2D6A4F; }
+  .entry.saida{ border-left-color: var(--stamp-red); }
+  .entry-icon{ width: 40px; height: 40px; border-radius: 50%; flex: none; display:flex; align-items:center;
+    justify-content:center; font-size: 16px; background: rgba(45,106,79,0.12); color: #2D6A4F; margin-top:2px; }
+  .entry.saida .entry-icon{ background: rgba(169,58,46,0.12); color: var(--stamp-red); }
+  .entry-thumb{ width: 40px; height: 40px; border-radius: 3px; object-fit: cover; flex: none; cursor: zoom-in;
+    border: 1px solid var(--kraft-dark); margin-top:2px; }
+  .entry-main{ flex:1; min-width:0; }
+  .entry-name{ font-weight:600; font-size:14.5px; color: var(--ink); }
+  .entry-desc{ font-size: 12.5px; color: var(--ink-soft); margin-top:2px; }
+  .entry-produtos{ font-size: 12px; color: var(--ink-soft); margin-top:3px; display:flex; flex-wrap:wrap; gap: 4px; }
+  .produto-tag{ background: var(--kraft); border-radius: 999px; padding: 2px 8px; }
+  .entry-date{ font-size: 10.5px; color: var(--ink-soft); opacity:0.8; margin-top:4px; font-weight:600; }
+  .entry-side{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none; }
+  .entry-amount{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size: 15px; white-space:nowrap; color: #2D6A4F; }
+  .entry.saida .entry-amount{ color: var(--stamp-red); }
+  .entry-actions{ display:flex; align-items:center; gap: 8px; }
+  .recibo-link{ font-size: 10.5px; color: var(--gold); border: 1px solid var(--gold); border-radius: 999px;
+    padding: 2px 9px; background: none; cursor:pointer; font-weight:600; white-space:nowrap; }
+  .entry-del{ flex:none; background:none; border:none; cursor:pointer; color: var(--ink-soft); font-size: 15px; padding: 2px; line-height:1; }
+  .entry-del:hover{ color: var(--stamp-red); }
+
+  .summary{ position: fixed; left:0; right:0; bottom:0; background: var(--ledger-green); color: var(--paper); padding: 10px 18px; box-shadow: 0 -4px 14px rgba(0,0,0,0.18); }
+  .summary-inner{ max-width: 760px; margin: 0 auto; width:100%; display:flex; align-items:center; justify-content: space-between; gap: 14px; }
+  .summary-mini{ font-size: 11px; color: var(--kraft-dark); display:flex; gap: 14px; }
+  .summary-mini b{ font-family:'IBM Plex Mono', monospace; color: var(--paper); font-weight:600; }
+  .summary-total-wrap{ text-align:right; }
+  .summary-label{ font-size: 10.5px; text-transform:uppercase; letter-spacing:0.08em; color: var(--kraft-dark); }
+  .summary-total{ font-family:'IBM Plex Mono', monospace; font-size: 19px; font-weight:600; }
+
+  .modal-backdrop{ position: fixed; inset:0; background: rgba(18,29,26,0.82); display:flex; align-items:center;
+    justify-content:center; padding: 24px; z-index: 50; }
+  .modal-backdrop img{ max-width: 100%; max-height: 85vh; border-radius: 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+  .modal-close{ position:absolute; top: 18px; right: 22px; background: var(--paper); border:none; width: 34px; height:34px;
+    border-radius:50%; font-size: 17px; cursor:pointer; color: var(--ink); z-index:2; }
+
+  .receipt-wrap{ position: relative; width: min(480px, 100%); }
+  .receipt{ background: #FDFCF8; padding: 22px; border: 1.5px solid #A8B4BE; border-radius: 2px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4); font-family: 'Inter', sans-serif; color: #23241F; position: relative; }
+
+  .r2-orgheader{ text-align:center; font-family:'Fraunces', serif; font-weight:700; font-size: 15px;
+    line-height:1.3; color: var(--ledger-green-dark); text-transform: uppercase; letter-spacing: 0.02em;
+    padding-bottom: 10px; margin-bottom: 10px; border-bottom: 2px solid #23241F; }
+  .r2-orgheader .r2-orgheader-country{ display:block; font-size: 12px; letter-spacing: 0.12em; margin-top: 2px; color: var(--ink-soft); }
+
+  .r2-header{ display:flex; align-items:flex-start; gap: 12px; padding-bottom: 10px; margin-bottom: 12px; }
+  .r2-logo{ width: 48px; height:48px; flex:none; border-radius:50%; border: 2px solid var(--ledger-green);
+    display:flex; align-items:center; justify-content:center; font-family:'Fraunces', serif; font-size:8px;
+    line-height:1.05; color: var(--ledger-green); text-align:center; }
+  .r2-orgname{ flex:1; }
+  .r2-orgtitle{ font-family:'Fraunces', serif; font-weight:700; font-size: 15px; line-height:1.2; color: var(--ledger-green-dark); }
+  .r2-orgsub{ font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .r2-recibo-label{ font-family:'Fraunces', serif; font-weight:700; font-size: 17px; text-align:right; white-space:nowrap; }
+  .r2-nr-box{ border: 1.3px solid #A8B4BE; border-radius: 2px; margin-top: 6px; min-width: 110px; }
+  .r2-nr-inner{ display:flex; align-items:center; gap:6px; padding: 4px 8px; font-size: 11px; }
+  .r2-nr-inner b{ font-family:'IBM Plex Mono', monospace; font-size: 12.5px; }
+
+  .r2-amount-row{ display:flex; border: 1.3px solid #A8B4BE; border-radius: 2px; margin-bottom: 10px; overflow:hidden; }
+  .r2-amount-label{ background: #DCE3EA; padding: 8px 12px; font-weight:700; font-size: 13px; display:flex; align-items:center; }
+  .r2-amount-value{ flex:1; padding: 8px 12px; font-family:'IBM Plex Mono', monospace; font-size: 17px; font-weight:700; text-align:right; }
+
+  .r2-words-box{ border: 1.3px solid #A8B4BE; border-radius: 2px; margin-bottom: 10px; }
+  .r2-words-label{ background: #DCE3EA; padding: 5px 12px; font-size: 10px; text-transform: uppercase; letter-spacing:.05em; font-weight:700; }
+  .r2-words-value{ padding: 9px 12px; font-size: 13px; font-style: italic; min-height: 18px; }
+
+  .r2-field{ border-bottom: 1px solid #B9C2C9; padding: 8px 2px; }
+  .r2-field-label{ font-size: 10px; text-transform: uppercase; letter-spacing:.05em; color: var(--ink-soft); font-weight:700; margin-bottom: 3px; }
+  .r2-field-value{ font-size: 14.5px; font-weight:600; }
+
+  .r2-thanks{ text-align:right; font-size: 12px; font-style: italic; color: var(--ink-soft); margin: 10px 2px 4px; }
+
+  .r2-footer{ display:flex; justify-content:space-between; align-items:flex-end; margin-top: 22px; padding-top: 12px; border-top: 1px dashed #B9C2C9; }
+  .r2-footer-notes{ font-size: 10px; color: var(--ink-soft); max-width: 60%; }
+  .r2-stamp-box{ text-align:center; }
+  .r2-stamp{ width: 62px; height:62px; border-radius:50%; border: 2px solid var(--stamp-red);
+    display:flex; align-items:center; justify-content:center; margin: 0 auto 4px; transform: rotate(-8deg);
+    font-family:'Fraunces', serif; font-size:9px; line-height:1.1; color: var(--stamp-red); }
+  .r2-stamp-label{ font-size: 9px; color: var(--ink-soft); text-transform: uppercase; letter-spacing:.05em; }
+
+  .receipt-actions{ display:flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+  .receipt-actions button{ flex:1; min-width: 92px; padding: 10px 6px; border-radius: 999px; border: 1.5px solid var(--paper);
+    font-family:'Inter', sans-serif; font-weight:600; font-size: 11.5px; cursor:pointer; background: var(--ledger-green); color: var(--paper); }
+  .receipt-actions button.secondary{ background: transparent; border-color: rgba(251,247,236,0.5); color: var(--paper); }
+
+  .edit-modal{ background: var(--paper); border-radius:4px; width:min(420px,100%); box-shadow:0 12px 40px rgba(0,0,0,.4); padding: 22px 22px 18px; }
+  .edit-modal h3{ font-family:'Fraunces', serif; font-size:16px; color: var(--ledger-green-dark); margin: 0 0 16px; text-transform:uppercase; letter-spacing:.04em; }
+  .edit-modal .field{ margin-bottom: 12px; }
+  .edit-modal-actions{ display:flex; gap:8px; margin-top: 6px; }
+  .edit-modal-actions button{ flex:1; padding:10px; border-radius:999px; border:none; font-family:'Inter', sans-serif; font-weight:600; font-size:12.5px; cursor:pointer; }
+  .edit-modal-actions .btn-salvar{ background: var(--ledger-green); color: var(--paper); }
+  .edit-modal-actions .btn-cancelar{ background: var(--kraft); color: var(--ink); }
+
+  .controle-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin: 4px 0; }
+  .controle-table{ width:100%; border-collapse:collapse; font-size:11.5px; white-space:nowrap; }
+  .controle-table th, .controle-table td{ padding:7px 9px; border-bottom:1px solid var(--kraft-dark); text-align:center; }
+  .controle-table th{ font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); border-bottom:1.5px solid var(--line); }
+  .controle-table th:first-child, .controle-table td:first-child{ text-align:left; position:sticky; left:0; background:var(--paper); font-weight:600; }
+  .controle-check{ color:#2D6A4F; font-weight:700; font-size: 14px; }
+  .controle-miss{ color: var(--stamp-red); opacity:0.45; }
+  .controle-total{ font-family:'IBM Plex Mono', monospace; font-weight:600; color: var(--ledger-green-dark); }
+  .controle-actions{ display:flex; gap:4px; justify-content:center; }
+  .controle-action-btn{ border:none; background:none; cursor:pointer; font-size: 13px; padding: 3px 5px;
+    border-radius: 4px; color: var(--ink-soft); }
+  .controle-action-btn:hover{ background: var(--kraft); }
+  .controle-action-btn.controle-del-btn:hover{ color: var(--stamp-red); }
+  .controle-action-btn.controle-edit-btn:hover{ color: var(--ledger-green); }
+
+  .controle-note{ font-size: 11px; color: var(--ink-soft); margin-top: 10px; font-style: italic; }
+
+  .report-modal{ background: var(--paper); border-radius:4px; width:min(640px,100%); max-height:90vh;
+    display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.4); }
+  .report-modal-header{ padding: 16px 20px 12px; display:flex; align-items:center; justify-content:space-between;
+    gap:10px; border-bottom:1px solid var(--kraft-dark); flex-wrap:wrap; }
+  .report-modal-header-title{ font-family:'Fraunces', serif; font-size:14px; font-weight:600; color: var(--ledger-green-dark); text-transform:uppercase; letter-spacing:.05em; }
+  .report-modal-header select{ font-family:'Inter', sans-serif; font-size:13px; padding:6px 10px; border-radius:999px;
+    border:1px solid var(--line); background:var(--kraft); color: var(--ink); }
+  .report-modal-body{ padding: 18px 20px; overflow-y:auto; }
+  .report-modal-actions{ padding: 14px 20px; border-top:1px solid var(--kraft-dark); display:flex; gap:8px; }
+  .report-modal-actions button{ flex:1; padding:10px; border-radius:999px; border:none; font-family:'Inter', sans-serif;
+    font-weight:600; font-size:12.5px; cursor:pointer; background: var(--ledger-green); color: var(--paper); }
+  .report-modal-actions button.secondary{ background: var(--kraft); color: var(--ink); }
+  .report-title{ font-family:'Fraunces', serif; font-size:19px; color:var(--ledger-green-dark); margin:0 0 2px; }
+  .report-subtitle{ font-size:12px; color:var(--ink-soft); margin-bottom:16px; }
+  .report h4{ font-family:'Fraunces', serif; font-size:12.5px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ledger-green-dark); margin: 18px 0 8px; }
+  .report table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .report th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft);
+    border-bottom:1.5px solid var(--line); padding:6px 6px; }
+  .report td{ padding:7px 6px; border-bottom:1px solid var(--kraft-dark); }
+  .report td.rtd-right, .report th.rtd-right{ text-align:right; font-family:'IBM Plex Mono', monospace; }
+  .report .report-empty-row td{ text-align:center; color:var(--ink-soft); font-style:italic; }
+  .report-totals{ margin-top:16px; border-top:2px solid var(--ledger-green); padding-top:10px; }
+  .report-totals .rt-row{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color: var(--ink-soft); }
+  .report-totals .rt-row b{ font-family:'IBM Plex Mono', monospace; color: var(--ink); }
+  .report-totals .rt-saldo{ font-weight:700; font-size:15.5px; margin-top:6px; border-top:1px dashed var(--line); padding-top:8px; color: var(--ledger-green-dark); }
+
+  @media print{
+    body > *:not(.print-area){ display:none !important; }
+    .print-area{ display:block !important; }
+    body{ background: #fff; padding:0; }
+  }
+  .print-area{ display:none; }
+  .status-msg{ font-size: 12.5px; color: var(--ink-soft); text-align:center; padding: 10px; }
+
+  @media (max-width: 480px){
+    .field-row{ grid-template-columns: 1fr; }
+    .topbar h1{ font-size: 21px; }
+    .summary-mini{ display:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="stamp-logo">CAJA<br>MANT.</div>
+    <h2>Caja Mantenimiento</h2>
+    <p>Ingresar al panel</p>
+    <div class="login-role-row">
+      <button class="role-btn" id="btnRoleAdmin" type="button">Entrar</button>
+    </div>
+    <div id="loginError" class="form-error"></div>
+    <div class="login-setup-note" id="loginSetupNote" style="display:none;">
+      <b style="display:block; font-family:'Fraunces', serif; font-size:13px; color:#5A4413; margin-bottom:6px;">⚠ Firebase aún no configurado</b>
+      Este archivo necesita estar conectado a una base de datos Firebase antes de funcionar.
+      Abra el archivo .html en un editor de texto, vea el comentario "FIREBASE" al inicio del código
+      y siga los pasos allí (toma unos 5 minutos, es gratis).
+    </div>
+  </div>
+</div>
+
+<div id="appArea" style="display:none;">
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="stamp-logo">CAJA<br>MANTENIMIENTO</div>
+    <div>
+      <h1 id="topbarTitle">Caja Mantenimiento</h1>
+      <p>Datos compartidos en tiempo real</p>
+    </div>
+    <div class="topbar-right">
+      <span class="role-badge" id="roleBadge">membro</span>
+      <button class="logout-link" id="logoutBtn" type="button">salir</button>
+    </div>
+  </div>
+</div>
+
+<div class="caixa-tabs" id="caixaTabsRow">
+  <button class="caixa-tab active" data-group="manutencao" type="button">🔧 Mantenimiento</button>
+  <button class="caixa-tab" data-group="aluguel" type="button">🏠 Alquiler</button>
+</div>
+
+<div class="caixa-subtabs" id="aluguelSubTabs" style="display:none;">
+  <button class="caixa-subtab active" data-caixa="aluguel_geral" type="button">💰 General</button>
+  <button class="caixa-subtab" data-caixa="aluguel_luz" type="button">💡 Electricidad · 60 Fr/mes</button>
+  <button class="caixa-subtab" data-caixa="aluguel_imposto" type="button">🧾 Impuesto Fin de Año · 40 Fr/mes</button>
+  <button class="caixa-subtab" data-caixa="aluguel_emergencia" type="button">🚨 Emergencia · 100 Fr/mes</button>
+</div>
+
+<div class="wrap">
+
+  <div class="meta-banner" id="metaBanner" style="display:none;"></div>
+
+  <div class="saldo-card">
+    <div>
+      <div class="saldo-label">Saldo en caja</div>
+      <div class="saldo-sub" id="saldoSub">0 entradas · 0 saídas</div>
+    </div>
+    <div class="saldo-value" id="saldoValue">R$ 0,00</div>
+  </div>
+
+  <div class="report-actions-row">
+    <button class="report-btn" id="btnRelatorioInterno" type="button" style="display:none;">📄 Informe Completo</button>
+    <button class="report-btn public" id="btnRelatorioPublico" type="button">🌐 Informe Mural (sin nombres)</button>
+    <button class="report-btn" id="btnControleAnual" type="button" style="display:none;">📅 Control Anual de Contribuyentes</button>
+  </div>
+
+  <div class="top-actions" id="topActionsAdmin" style="display:none;">
+    <button class="reset-link" id="resetBtn" type="button">limpiar todos los registros de esta caja</button>
+  </div>
+
+  <div id="adminFormBlock" style="display:none;">
+    <div class="tabs">
+      <button class="tab-btn active" data-tipo="entrada" id="tabEntrada" type="button">💰 Ingreso (recibido)</button>
+      <button class="tab-btn" data-tipo="saida" id="tabSaida" type="button">🧾 Salida (gasto)</button>
+    </div>
+
+    <div class="slip" id="slipCard">
+      <h2 id="slipTitle">Registrar ingreso</h2>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="fNome">Nombre de quien pagó</label>
+          <input type="text" id="fNome" placeholder="Ej: María Silva" list="nomesColaboradores" autocomplete="off">
+          <datalist id="nomesColaboradores"></datalist>
+        </div>
+        <div class="field valor">
+          <label for="fValor">Importe (R$)</label>
+          <input type="text" id="fValor" placeholder="Ej: 150,00" inputmode="decimal">
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="fData">Fecha</label>
+          <input type="date" id="fData">
+        </div>
+        <div class="field" id="fieldDescWrap" style="display:none;">
+          <label for="fDesc">Descripción breve</label>
+          <input type="text" id="fDesc" placeholder="Ej: Compras en el mercado">
+        </div>
+      </div>
+
+      <div class="field" id="fieldProdutosWrap" style="margin-bottom:12px; display:none;">
+        <label for="fProdutos">Productos comprados</label>
+        <textarea id="fProdutos" placeholder="Un producto por línea, o separados por coma&#10;Ej: Detergente&#10;Papel toalla&#10;Café"></textarea>
+      </div>
+
+      <div class="photo-drop-area" id="photoDropArea" style="display:none;">
+        <div class="photo-empty" id="photoEmptyState">
+          <span class="photo-empty-label">📎 Adjunte la foto del comprobante (opcional)</span>
+          <div class="photo-btn-row">
+            <button type="button" class="photo-btn" id="btnTirarFoto">📷 Tomar foto</button>
+            <button type="button" class="photo-btn secondary" id="btnEscolherGaleria">🖼 Elegir de la galería</button>
+          </div>
+        </div>
+        <div class="photo-filled" id="photoFilledState" style="display:none;"></div>
+        <input type="file" id="fFotoCamera" accept="image/*" capture="environment" style="display:none;">
+        <input type="file" id="fFotoGaleria" accept="image/*" style="display:none;">
+      </div>
+
+      <div class="form-error" id="formError"></div>
+      <button class="add-btn" id="addBtn" type="button">Registrar ingreso</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <h2>Historial</h2>
+    <div class="rule"></div>
+    <select class="search-input" id="monthFilter"></select>
+    <input class="search-input" id="searchInput" type="text" placeholder="Buscar...">
+  </div>
+
+  <div id="listArea">
+    <div class="status-msg">Cargando registros...</div>
+  </div>
+
+</div>
+
+<div class="summary">
+  <div class="summary-inner">
+    <div class="summary-mini">
+      <span>Ingresos <b id="miniEntradas">R$ 0,00</b></span>
+      <span>Salidas <b id="miniSaidas">R$ 0,00</b></span>
+    </div>
+    <div class="summary-total-wrap">
+      <div class="summary-label">Saldo</div>
+      <div class="summary-total" id="summaryTotal">R$ 0,00</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /appArea -->
+
+<div class="print-area" id="printArea"></div>
+
+<script>
+(function(){
+  const CAIXA_COLLECTIONS = {
+    manutencao: 'caixa_manutencao',
+    aluguel_geral: 'caixa_aluguel_geral',
+    aluguel_luz: 'caixa_aluguel_luz',
+    aluguel_imposto: 'caixa_aluguel_imposto',
+    aluguel_emergencia: 'caixa_aluguel_emergencia'
+  };
+  const CAIXA_LABELS = {
+    manutencao: 'Caja Mantenimiento',
+    aluguel_geral: 'Caja Alquiler',
+    aluguel_luz: 'Caja Alquiler — Electricidad',
+    aluguel_imposto: 'Caja Alquiler — Impuesto Fin de Año',
+    aluguel_emergencia: 'Caja Alquiler — Emergencia'
+  };
+  const CAIXA_RECEIPT_PREFIX = {
+    manutencao: 'MNT',
+    aluguel_geral: 'ALG',
+    aluguel_luz: 'LUZ',
+    aluguel_imposto: 'IMP',
+    aluguel_emergencia: 'EMG'
+  };
+  const CAIXA_METAS = {
+    aluguel_luz: 60,
+    aluguel_emergencia: 100,
+    aluguel_imposto: 40
+  };
+  const CAIXA_GROUP = {
+    manutencao: 'manutencao',
+    aluguel_geral: 'aluguel',
+    aluguel_luz: 'aluguel',
+    aluguel_imposto: 'aluguel',
+    aluguel_emergencia: 'aluguel'
+  };
+  let currentCaixa = 'manutencao';
+  let colaboradoresNomes = [];
+  let unsubscribeColaboradores = null;
+  let entries = [];
+  let privadoCache = {};
+  let pendingPhoto = null;
+  let searchTerm = '';
+  let currentTipo = 'entrada';
+  let db = null;
+  let auth = null;
+  let currentRole = null;
+  let unsubscribeSnapshot = null;
+
+  const loginScreen = document.getElementById('loginScreen');
+  const appArea = document.getElementById('appArea');
+  const btnRoleAdmin = document.getElementById('btnRoleAdmin');
+  const loginError = document.getElementById('loginError');
+  const loginSetupNote = document.getElementById('loginSetupNote');
+  const roleBadge = document.getElementById('roleBadge');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const topbarTitle = document.getElementById('topbarTitle');
+  const nomesColaboradoresDatalist = document.getElementById('nomesColaboradores');
+  const metaBanner = document.getElementById('metaBanner');
+  const aluguelSubTabs = document.getElementById('aluguelSubTabs');
+
+  const listArea = document.getElementById('listArea');
+  const monthFilter = document.getElementById('monthFilter');
+  const saldoValue = document.getElementById('saldoValue');
+  const saldoSub = document.getElementById('saldoSub');
+  const summaryTotal = document.getElementById('summaryTotal');
+  const miniEntradas = document.getElementById('miniEntradas');
+  const miniSaidas = document.getElementById('miniSaidas');
+  const formError = document.getElementById('formError');
+  const addBtn = document.getElementById('addBtn');
+  const fNome = document.getElementById('fNome');
+  const fDesc = document.getElementById('fDesc');
+  const fValor = document.getElementById('fValor');
+  const fData = document.getElementById('fData');
+  const fProdutos = document.getElementById('fProdutos');
+  const slipCard = document.getElementById('slipCard');
+  const slipTitle = document.getElementById('slipTitle');
+  const fieldDescWrap = document.getElementById('fieldDescWrap');
+  const fieldProdutosWrap = document.getElementById('fieldProdutosWrap');
+  const tabEntrada = document.getElementById('tabEntrada');
+  const tabSaida = document.getElementById('tabSaida');
+  const printArea = document.getElementById('printArea');
+  const topActionsAdmin = document.getElementById('topActionsAdmin');
+  const adminFormBlock = document.getElementById('adminFormBlock');
+  const btnRelatorioInterno = document.getElementById('btnRelatorioInterno');
+  const btnRelatorioPublico = document.getElementById('btnRelatorioPublico');
+  const btnControleAnual = document.getElementById('btnControleAnual');
+
+  const photoDropArea = document.getElementById('photoDropArea');
+  const photoEmptyState = document.getElementById('photoEmptyState');
+  const photoFilledState = document.getElementById('photoFilledState');
+  const btnTirarFoto = document.getElementById('btnTirarFoto');
+  const btnEscolherGaleria = document.getElementById('btnEscolherGaleria');
+  const fFotoCamera = document.getElementById('fFotoCamera');
+  const fFotoGaleria = document.getElementById('fFotoGaleria');
+
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function fmtBRL(n){ return n.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); }
+  function fmtDateISO(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-');
+    if(!y||!m||!d) return iso;
+    return `${d}/${m}/${y}`;
+  }
+  function parseValor(str){
+    if(!str) return NaN;
+    str = str.trim().replace(/[^\d,.\-]/g,'');
+    if(str.includes(',') && str.includes('.')){ str = str.replace(/\./g,'').replace(',', '.'); }
+    else if(str.includes(',')){ str = str.replace(',', '.'); }
+    return parseFloat(str);
+  }
+  function parseProdutosInput(str){
+    if(!str) return [];
+    return str.split(/\n|,/).map(s => s.trim()).filter(Boolean);
+  }
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
+  }
+  function nextReceiptNumber(){
+    const nums = Object.values(privadoCache).map(p => p && p.receiptNumber ? parseInt(String(p.receiptNumber).replace(/\D/g,''),10) : NaN).filter(n => !isNaN(n));
+    const max = nums.length ? Math.max(...nums) : 0;
+    return 'REC-' + CAIXA_RECEIPT_PREFIX[currentCaixa] + '-' + String(max + 1).padStart(4, '0');
+  }
+  function movCollection(){
+    return db.collection(CAIXA_COLLECTIONS[currentCaixa]);
+  }
+
+  function updateMetaBanner(){
+    const meta = CAIXA_METAS[currentCaixa];
+    if(meta){
+      metaBanner.style.display = 'flex';
+      metaBanner.innerHTML = `🎯 Meta mensual de esta caja: <b>${meta} Fr</b> — importe que debe destinarse cada mes, incluso si el saldo está bajo.`;
+    } else {
+      metaBanner.style.display = 'none';
+    }
+  }
+
+  function updateControleAnualVisibility(){
+    btnControleAnual.style.display = (currentRole === 'admin' && currentCaixa === 'manutencao') ? '' : 'none';
+  }
+
+  function switchCaixa(caixa){
+    currentCaixa = caixa;
+    const grupo = CAIXA_GROUP[caixa];
+    document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === grupo));
+    document.querySelectorAll('.caixa-subtab').forEach(btn => btn.classList.toggle('active', btn.dataset.caixa === caixa));
+    aluguelSubTabs.style.display = grupo === 'aluguel' ? 'flex' : 'none';
+    topbarTitle.textContent = CAIXA_LABELS[caixa];
+    updateMetaBanner();
+    updateControleAnualVisibility();
+    entries = []; privadoCache = {};
+    searchTerm = ''; document.getElementById('searchInput').value = '';
+    render();
+    if(currentRole){ attachSnapshot(); if(currentRole === 'admin') switchTipo('entrada'); }
+  }
+  document.querySelectorAll('.caixa-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const grupo = btn.dataset.group;
+      if(grupo === CAIXA_GROUP[currentCaixa]) return;
+      switchCaixa(grupo === 'aluguel' ? 'aluguel_geral' : 'manutencao');
+    });
+  });
+  document.querySelectorAll('.caixa-subtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if(btn.dataset.caixa === currentCaixa) return;
+      switchCaixa(btn.dataset.caixa);
+    });
+  });
+
+  function attachColaboradoresListener(){
+    if(unsubscribeColaboradores) return;
+    unsubscribeColaboradores = db.collection('colaboradores').orderBy('nome').onSnapshot(
+      (snapshot) => {
+        colaboradoresNomes = snapshot.docs.map(d => d.data().nome).filter(Boolean);
+        nomesColaboradoresDatalist.innerHTML = colaboradoresNomes.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+      },
+      () => { /* silencioso: lista de sugestão é só um extra, não é crítico */ }
+    );
+  }
+
+  async function salvarColaboradorSeNovo(nome){
+    const jaExiste = colaboradoresNomes.some(n => n.trim().toLowerCase() === nome.trim().toLowerCase());
+    if(jaExiste) return;
+    try{ await db.collection('colaboradores').add({ nome: nome.trim(), createdAt: Date.now() }); }
+    catch(err){ /* não bloqueia o fluxo principal se isso falhar */ }
+  }
+
+  // ============ LOGIN (sem senha por enquanto) ============
+  async function chooseRole(role){
+    if(!firebaseConfig || firebaseConfig.apiKey === 'SUA_API_KEY_AQUI'){ loginSetupNote.style.display = 'block'; return; }
+    loginError.textContent = '';
+    btnRoleAdmin.disabled = true;
+    try{
+      if(!auth.currentUser){ await auth.signInAnonymously(); }
+      currentRole = role;
+      localStorage.setItem('caixaManutencaoRole', role);
+      loginScreen.style.display = 'none';
+      appArea.style.display = 'block';
+      applyRoleUI();
+      attachSnapshot();
+      attachColaboradoresListener();
+    } catch(err){
+      loginError.textContent = 'No se pudo ingresar. Verifique que "Authentication > Anónimo" esté activado en Firebase.';
+    }
+    btnRoleAdmin.disabled = false;
+  }
+  btnRoleAdmin.addEventListener('click', () => chooseRole('admin'));
+  logoutBtn.addEventListener('click', () => {
+    localStorage.removeItem('caixaManutencaoRole');
+    currentRole = null;
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    entries = []; privadoCache = {};
+    appArea.style.display = 'none';
+    loginScreen.style.display = 'flex';
+  });
+
+  function applyRoleUI(){
+    const isAdmin = currentRole === 'admin';
+    roleBadge.textContent = 'ADM';
+    roleBadge.classList.toggle('admin', isAdmin);
+    adminFormBlock.style.display = isAdmin ? 'block' : 'none';
+    topActionsAdmin.style.display = isAdmin ? 'flex' : 'none';
+    btnRelatorioInterno.style.display = isAdmin ? '' : 'none';
+    updateControleAnualVisibility();
+    if(isAdmin) switchTipo('entrada');
+  }
+
+  // ============ FIREBASE INIT ============
+  function initFirebase(){
+    if(!firebaseConfig || firebaseConfig.apiKey === 'SUA_API_KEY_AQUI'){
+      loginSetupNote.style.display = 'block';
+      btnRoleAdmin.disabled = true;
+      btnRoleAdmin.style.opacity = '0.5';
+      return;
+    }
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    auth = firebase.auth();
+    auth.onAuthStateChanged((user) => {
+      if(user){
+        const storedRole = localStorage.getItem('caixaManutencaoRole');
+        if(storedRole){
+          currentRole = storedRole;
+          loginScreen.style.display = 'none';
+          appArea.style.display = 'block';
+          applyRoleUI();
+          attachSnapshot();
+          attachColaboradoresListener();
+        }
+        // se não há papel salvo, fica na tela de login aguardando o clique em Entrar
+      } else {
+        currentRole = null;
+        if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+        entries = []; privadoCache = {};
+        appArea.style.display = 'none';
+        loginScreen.style.display = 'flex';
+      }
+    });
+  }
+
+  function attachSnapshot(){
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); }
+    unsubscribeSnapshot = movCollection().orderBy('createdAt', 'desc').onSnapshot(
+      async (snapshot) => {
+        entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if(currentRole === 'admin'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
+        render();
+      },
+      () => { showTransientError('No se pudieron cargar los datos. Verifique las reglas de Firestore.'); }
+    );
+  }
+
+  async function loadPrivadoFor(ids){
+    const missing = ids.filter(id => !(id in privadoCache));
+    if(missing.length === 0) return;
+    await Promise.all(missing.map(async (id) => {
+      try{
+        const doc = await movCollection().doc(id).collection('privado').doc('dados').get();
+        privadoCache[id] = doc.exists ? doc.data() : { nome: '(sem nome)', receiptNumber: null };
+      } catch(err){ privadoCache[id] = { nome: '(sem acesso)', receiptNumber: null }; }
+    }));
+  }
+
+  function showTransientError(msg){
+    formError.textContent = msg;
+    setTimeout(()=>{ if(formError.textContent === msg) formError.textContent=''; }, 5000);
+  }
+
+  // ============ FORM / TABS (admin only) ============
+  function switchTipo(tipo){
+    currentTipo = tipo;
+    resetPhotoField();
+    formError.textContent = '';
+    fNome.value = ''; fDesc.value = ''; fValor.value = ''; fProdutos.value = '';
+    fData.value = todayStr();
+    tabEntrada.classList.toggle('active', tipo === 'entrada');
+    tabSaida.classList.toggle('active', tipo === 'saida');
+    slipCard.classList.toggle('tipo-saida', tipo === 'saida');
+    addBtn.classList.toggle('tipo-saida', tipo === 'saida');
+    if(tipo === 'entrada'){
+      slipTitle.textContent = 'Registrar ingreso';
+      fieldDescWrap.style.display = 'none';
+      fieldProdutosWrap.style.display = 'none';
+      photoDropArea.style.display = 'none';
+      addBtn.textContent = 'Registrar ingreso';
+    } else {
+      slipTitle.textContent = 'Registrar salida (gasto)';
+      fieldDescWrap.style.display = '';
+      fieldProdutosWrap.style.display = '';
+      photoDropArea.style.display = 'block';
+      addBtn.textContent = 'Registrar salida';
+    }
+  }
+  tabEntrada.addEventListener('click', () => switchTipo('entrada'));
+  tabSaida.addEventListener('click', () => switchTipo('saida'));
+
+  function compressImage(file){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Arquivo de imagem inválido'));
+        img.onload = () => {
+          const maxDim = 900;
+          let { width, height } = img;
+          if(width > maxDim || height > maxDim){
+            if(width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+            else { width = Math.round(width * maxDim / height); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.65));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  function resetPhotoField(){
+    pendingPhoto = null;
+    fFotoCamera.value = ''; fFotoGaleria.value = '';
+    photoFilledState.style.display = 'none';
+    photoFilledState.innerHTML = '';
+    photoEmptyState.style.display = 'block';
+  }
+  async function handlePhotoFile(file){
+    if(!file) return;
+    try{
+      const dataUrl = await compressImage(file);
+      pendingPhoto = dataUrl;
+      photoEmptyState.style.display = 'none';
+      photoFilledState.style.display = 'flex';
+      photoFilledState.innerHTML = '';
+      const img = document.createElement('img'); img.src = dataUrl;
+      const label = document.createElement('span');
+      label.className = 'photo-filled-label'; label.textContent = 'Comprobante adjuntado';
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button'; removeBtn.className = 'remove-photo'; removeBtn.textContent = 'eliminar';
+      removeBtn.addEventListener('click', (ev)=>{ ev.preventDefault(); ev.stopPropagation(); resetPhotoField(); });
+      photoFilledState.appendChild(img); photoFilledState.appendChild(label); photoFilledState.appendChild(removeBtn);
+    } catch(e){ showTransientError('No se pudo procesar la foto.'); }
+  }
+  btnTirarFoto.addEventListener('click', () => fFotoCamera.click());
+  btnEscolherGaleria.addEventListener('click', () => fFotoGaleria.click());
+  fFotoCamera.addEventListener('change', () => handlePhotoFile(fFotoCamera.files[0]));
+  fFotoGaleria.addEventListener('change', () => handlePhotoFile(fFotoGaleria.files[0]));
+
+  // ============ SUBMIT (admin only) ============
+  addBtn.addEventListener('click', async () => {
+    if(currentRole !== 'admin') return;
+    const valor = parseValor(fValor.value);
+    if(isNaN(valor) || valor <= 0){ formError.textContent = 'Ingrese un importe válido.'; return; }
+    const data = fData.value || todayStr();
+    formError.textContent = '';
+    addBtn.disabled = true;
+
+    try{
+      if(currentTipo === 'entrada'){
+        const nome = fNome.value.trim();
+        if(!nome){ formError.textContent = 'Ingrese el nombre de quien pagó.'; addBtn.disabled = false; return; }
+        const receiptNumber = nextReceiptNumber();
+        const docRef = await movCollection().add({ tipo: 'entrada', valor, data, createdAt: Date.now() });
+        await docRef.collection('privado').doc('dados').set({ nome, receiptNumber });
+        privadoCache[docRef.id] = { nome, receiptNumber };
+        salvarColaboradorSeNovo(nome);
+        fNome.value = ''; fValor.value = ''; fData.value = todayStr();
+        openReceiptModal({ id: docRef.id, tipo:'entrada', valor, data, nome, receiptNumber });
+      } else {
+        const produtos = parseProdutosInput(fProdutos.value);
+        const desc = fDesc.value.trim();
+        if(!desc && produtos.length === 0){ formError.textContent = 'Ingrese la descripción o los productos comprados.'; addBtn.disabled = false; return; }
+        await movCollection().add({ tipo: 'saida', descricao: desc, produtos, valor, data, foto: pendingPhoto || null, createdAt: Date.now() });
+        fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fData.value = todayStr();
+        resetPhotoField();
+      }
+    } catch(err){ showTransientError('No se pudo guardar. Verifique su conexión y las reglas de Firestore.'); }
+    addBtn.disabled = false;
+  });
+
+  async function deleteEntry(id, tipo){
+    if(currentRole !== 'admin') return;
+    if(!confirm('¿Eliminar este registro?')) return;
+    try{
+      if(tipo === 'entrada'){ await movCollection().doc(id).collection('privado').doc('dados').delete().catch(()=>{}); }
+      await movCollection().doc(id).delete();
+      delete privadoCache[id];
+    } catch(err){ showTransientError('No se pudo eliminar este registro.'); }
+  }
+
+  document.getElementById('resetBtn').addEventListener('click', async () => {
+    if(currentRole !== 'admin' || entries.length === 0) return;
+    if(!confirm(`Esto eliminará TODOS los registros de ${CAIXA_LABELS[currentCaixa]} para TODOS los que usan este sitio. ¿Desea continuar?`)) return;
+    try{
+      const batch = db.batch();
+      const snapshot = await movCollection().get();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      privadoCache = {};
+    } catch(err){ showTransientError('No se pudieron limpiar los registros.'); }
+  });
+
+  document.getElementById('searchInput').addEventListener('input', (e) => { searchTerm = e.target.value.trim().toLowerCase(); render(); });
+  monthFilter.addEventListener('change', () => render());
+
+  function openModal(dataUrl){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const img = document.createElement('img'); img.src = dataUrl;
+    const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    backdrop.appendChild(img); backdrop.appendChild(closeBtn);
+    document.body.appendChild(backdrop);
+  }
+
+  function numeroPorExtenso(valor){
+    const unidades = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+    const dezA19 = ['diez','once','doce','trece','catorce','quince','dieciséis','diecisiete','dieciocho','diecinueve'];
+    const dezenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+    const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+
+    function trescentos(n){
+      if(n === 0) return '';
+      if(n === 100) return 'cien';
+      const partes = [];
+      const c = Math.floor(n/100), resto = n % 100;
+      if(c > 0) partes.push(centenas[c]);
+      if(resto > 0){
+        if(resto < 10) partes.push(unidades[resto]);
+        else if(resto < 20) partes.push(dezA19[resto-10]);
+        else if(resto === 20) partes.push('veinte');
+        else if(resto < 30) partes.push('veinti' + unidades[resto-20]);
+        else {
+          const d = Math.floor(resto/10), u = resto % 10;
+          partes.push(u > 0 ? `${dezenas[d]} y ${unidades[u]}` : dezenas[d]);
+        }
+      }
+      return partes.join(' ');
+    }
+    function inteiroExtenso(n){
+      if(n === 0) return 'cero';
+      const partes = [];
+      const milhar = Math.floor(n/1000), resto = n % 1000;
+      if(milhar > 0) partes.push(milhar === 1 ? 'mil' : `${trescentos(milhar)} mil`);
+      if(resto > 0) partes.push(trescentos(resto));
+      return partes.join(' ');
+    }
+
+    const inteiro = Math.floor(valor);
+    const centavos = Math.round((valor - inteiro) * 100);
+    let texto = inteiroExtenso(inteiro) + (inteiro === 1 ? ' franco' : ' francos');
+    if(centavos > 0){
+      texto += ' y ' + inteiroExtenso(centavos) + (centavos === 1 ? ' céntimo' : ' céntimos');
+    }
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+  }
+
+  function nomeArquivoRecibo(entry){
+    const partes = [];
+    partes.push(entry.nome ? entry.nome.trim().replace(/\s+/g,'_') : 'comprovante');
+    if(entry.data){
+      const mes = parseInt(entry.data.slice(5,7),10);
+      const ano = entry.data.slice(0,4);
+      if(mes >= 1 && mes <= 12) partes.push(MESES[mes-1]);
+      if(ano) partes.push(ano);
+    }
+    return `recibo-${partes.join('-')}.png`;
+  }
+
+  function receiptInnerHtml(entry){
+    const isAnonimo = !entry.nome;
+    const deRow = isAnonimo
+      ? `<div class="r2-field"><div class="r2-field-label">De</div><div class="r2-field-value">Miembro (sin identificación)</div></div>`
+      : `<div class="r2-field"><div class="r2-field-label">De</div><div class="r2-field-value">${escapeHtml(entry.nome)}</div></div>`;
+    const numExibido = entry.receiptNumber || '—';
+    return `
+      <div class="receipt" id="receiptCard">
+        <div class="r2-orgheader">
+          IGLESIA GNÓSTICA CRISTIANA UNIVERSAL SAMAEL AUN WEOR
+          <span class="r2-orgheader-country">ISÉRABLES / SUIZA</span>
+        </div>
+        <div class="r2-header">
+          <div class="r2-logo">CAIXA<br>${isAnonimo ? 'FUNDO' : 'PAGO'}</div>
+          <div class="r2-orgname">
+            <div class="r2-orgtitle">${CAIXA_LABELS[currentCaixa]}</div>
+            <div class="r2-orgsub">${isAnonimo ? 'Comprobante de Pago' : 'Recibo de Pago'}</div>
+          </div>
+          <div>
+            <div class="r2-recibo-label">Recibo</div>
+            <div class="r2-nr-box"><div class="r2-nr-inner">Nr. <b>${numExibido}</b></div></div>
+          </div>
+        </div>
+
+        <div class="r2-amount-row">
+          <div class="r2-amount-label">Fr.</div>
+          <div class="r2-amount-value">${fmtBRL(entry.valor).replace('R$', '').trim()}</div>
+        </div>
+
+        <div class="r2-words-box">
+          <div class="r2-words-label">Importe en palabras</div>
+          <div class="r2-words-value">${numeroPorExtenso(entry.valor)}</div>
+        </div>
+
+        ${deRow}
+        <div class="r2-field"><div class="r2-field-label">Referente a</div><div class="r2-field-value">${CAIXA_LABELS[currentCaixa]} Lumisial de Isérables</div></div>
+        <div class="r2-field"><div class="r2-field-label">Fecha</div><div class="r2-field-value">${fmtDateISO(entry.data)}</div></div>
+
+        <div class="r2-thanks">— recibido con agradecimiento —</div>
+
+        <div class="r2-footer">
+          <div class="r2-footer-notes">Documento generado automáticamente por el sistema ${CAIXA_LABELS[currentCaixa]}.</div>
+          <div class="r2-stamp-box">
+            <div class="r2-stamp">CAIXA<br>PAGO</div>
+            <div class="r2-stamp-label">Sello</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function openReceiptModal(entry){
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const wrap = document.createElement('div'); wrap.className = 'receipt-wrap';
+    wrap.innerHTML = receiptInnerHtml(entry) + `
+      <div class="receipt-actions">
+        <button type="button" id="btnBaixarRecibo">⬇ Descargar</button>
+        <button type="button" id="btnCompartilharRecibo" class="secondary">🔗 Compartir</button>
+        <button type="button" id="btnImprimirRecibo" class="secondary">🖨 Imprimir</button>
+      </div>`;
+    const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    backdrop.appendChild(wrap); backdrop.appendChild(closeBtn);
+    document.body.appendChild(backdrop);
+
+    wrap.querySelector('#btnBaixarRecibo').addEventListener('click', async () => {
+      const card = wrap.querySelector('#receiptCard');
+      try{
+        const canvas = await html2canvas(card, { backgroundColor: '#FBF7EC', scale: 2 });
+        const link = document.createElement('a');
+        link.download = nomeArquivoRecibo(entry);
+        link.href = canvas.toDataURL('image/png'); link.click();
+      } catch(err){ alert('No se pudo generar la imagen del recibo. Use la opción Imprimir.'); }
+    });
+    wrap.querySelector('#btnCompartilharRecibo').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget; const originalLabel = btn.textContent;
+      btn.textContent = '...'; btn.disabled = true;
+      try{
+        const card = wrap.querySelector('#receiptCard');
+        const canvas = await html2canvas(card, { backgroundColor: '#FBF7EC', scale: 2 });
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        const fileName = nomeArquivoRecibo(entry);
+        const shareText = `Recibo ${entry.receiptNumber} — ${entry.nome} — ${fmtBRL(entry.valor)} — ${fmtDateISO(entry.data)}`;
+        const file = blob ? new File([blob], fileName, { type: 'image/png' }) : null;
+        if(file && navigator.canShare && navigator.canShare({ files: [file] })){
+          await navigator.share({ files: [file], title: 'Recibo de Pago', text: shareText });
+        } else if(navigator.share){ await navigator.share({ title: 'Recibo de Pago', text: shareText }); }
+        else { throw new Error('unsupported'); }
+      } catch(err){
+        if(err && err.name === 'AbortError'){ /* cancelado */ }
+        else{
+          try{
+            const card = wrap.querySelector('#receiptCard');
+            const canvas = await html2canvas(card, { backgroundColor: '#FBF7EC', scale: 2 });
+            const link = document.createElement('a');
+            link.download = nomeArquivoRecibo(entry);
+            link.href = canvas.toDataURL('image/png'); link.click();
+            alert('Uso compartido directo no disponible aquí — el recibo se descargó para compartir manualmente.');
+          } catch(err2){ alert('No se pudo compartir ni descargar el recibo.'); }
+        }
+      } finally{ btn.textContent = originalLabel; btn.disabled = false; }
+    });
+    wrap.querySelector('#btnImprimirRecibo').addEventListener('click', () => { printArea.innerHTML = receiptInnerHtml(entry); window.print(); });
+  }
+
+  const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  function monthsAvailable(){
+    const set = new Set(entries.map(e => (e.data || '').slice(0,7)).filter(Boolean));
+    set.add(todayStr().slice(0,7));
+    return [...set].sort().reverse();
+  }
+  function anosDisponiveisTodos(){
+    const set = new Set(entries.map(e => (e.data || '').slice(0,4)).filter(Boolean));
+    set.add(String(new Date().getFullYear()));
+    return [...set].sort().reverse();
+  }
+  function monthLabel(ym){ const [y,m] = ym.split('-'); return `${MESES[parseInt(m,10)-1]} de ${y}`; }
+  function emptyRow(cols, text){ return `<tr class="report-empty-row"><td colspan="${cols}">${text}</td></tr>`; }
+
+  const PERIOD_TYPE_LABELS = { mensal: 'Mensual', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual' };
+
+  function periodOptionsFor(tipo){
+    if(tipo === 'mensal'){ return monthsAvailable().map(ym => ({ value: ym, label: monthLabel(ym) })); }
+    const anos = anosDisponiveisTodos();
+    if(tipo === 'trimestral'){
+      const opts = [];
+      anos.forEach(ano => { for(let q=4; q>=1; q--){ opts.push({ value: `${ano}-Q${q}`, label: `${q}º Trimestre de ${ano}` }); } });
+      return opts;
+    }
+    if(tipo === 'semestral'){
+      const opts = [];
+      anos.forEach(ano => { for(let s=2; s>=1; s--){ opts.push({ value: `${ano}-S${s}`, label: `${s}º Semestre de ${ano}` }); } });
+      return opts;
+    }
+    return anos.map(ano => ({ value: ano, label: `Año de ${ano}` }));
+  }
+
+  function parsePeriodo(tipo, value){
+    if(tipo === 'mensal'){
+      const mes = parseInt(value.slice(5,7),10);
+      return { ano: value.slice(0,4), mesIni: mes, mesFim: mes, label: monthLabel(value) };
+    }
+    if(tipo === 'trimestral'){
+      const [ano, qStr] = value.split('-Q');
+      const q = parseInt(qStr,10);
+      const mesIni = (q-1)*3+1, mesFim = mesIni+2;
+      return { ano, mesIni, mesFim, label: `${q}º Trimestre de ${ano} (${MESES[mesIni-1]}–${MESES[mesFim-1]})` };
+    }
+    if(tipo === 'semestral'){
+      const [ano, sStr] = value.split('-S');
+      const s = parseInt(sStr,10);
+      const mesIni = s === 1 ? 1 : 7, mesFim = s === 1 ? 6 : 12;
+      return { ano, mesIni, mesFim, label: `${s}º Semestre de ${ano} (${MESES[mesIni-1]}–${MESES[mesFim-1]})` };
+    }
+    return { ano: value, mesIni: 1, mesFim: 12, label: `Año de ${value}` };
+  }
+
+  function inPeriodo(dataISO, periodo){
+    if(!dataISO) return false;
+    const y = dataISO.slice(0,4);
+    const m = parseInt(dataISO.slice(5,7),10);
+    return y === periodo.ano && m >= periodo.mesIni && m <= periodo.mesFim;
+  }
+
+  function buildReportHtml(periodo, mode){
+    const periodoEntries = entries.filter(e => inPeriodo(e.data, periodo));
+    const entradasList = periodoEntries.filter(e => e.tipo === 'entrada').sort((a,b) => a.data < b.data ? -1 : (a.data > b.data ? 1 : 0));
+    const saidasList = periodoEntries.filter(e => e.tipo === 'saida').sort((a,b) => a.data < b.data ? -1 : (a.data > b.data ? 1 : 0));
+    const totalEntradas = entradasList.reduce((s,e) => s + e.valor, 0);
+    const totalSaidas = saidasList.reduce((s,e) => s + e.valor, 0);
+    const saldoPeriodo = totalEntradas - totalSaidas;
+
+    let entradasHead, entradasRows;
+    if(mode === 'publico'){
+      entradasHead = `<tr><th>Fecha</th><th class="rtd-right">Importe</th></tr>`;
+      entradasRows = entradasList.length
+        ? entradasList.map(e => `<tr><td>${fmtDateISO(e.data)}</td><td class="rtd-right">${fmtBRL(e.valor)}</td></tr>`).join('')
+        : emptyRow(2, 'Ningún ingreso en este período');
+    } else {
+      entradasHead = `<tr><th>Fecha</th><th>Nombre</th><th>Recibo</th><th class="rtd-right">Importe</th></tr>`;
+      entradasRows = entradasList.length
+        ? entradasList.map(e => { const p = privadoCache[e.id] || {}; return `<tr><td>${fmtDateISO(e.data)}</td><td>${escapeHtml(p.nome||'')}</td><td>${p.receiptNumber||''}</td><td class="rtd-right">${fmtBRL(e.valor)}</td></tr>`; }).join('')
+        : emptyRow(4, 'Ningún ingreso en este período');
+    }
+    const saidasHead = `<tr><th>Fecha</th><th>Descripción / productos</th><th class="rtd-right">Importe</th></tr>`;
+    const saidasRows = saidasList.length
+      ? saidasList.map(e => { const desc = e.descricao || (e.produtos && e.produtos.length ? e.produtos.join(', ') : 'Saída do caixa'); return `<tr><td>${fmtDateISO(e.data)}</td><td>${escapeHtml(desc)}</td><td class="rtd-right">${fmtBRL(e.valor)}</td></tr>`; }).join('')
+      : emptyRow(3, 'Ninguna salida en este período');
+
+    const subtitle = mode === 'publico' ? 'Informe Mural — sin identificación de quien pagó' : 'Informe Completo — incluye nombres y números de recibo';
+    return `
+      <div class="report">
+        <div class="report-title">${CAIXA_LABELS[currentCaixa]} — ${periodo.label}</div>
+        <div class="report-subtitle">${subtitle}</div>
+        <h4>Ingresos</h4>
+        <table><thead>${entradasHead}</thead><tbody>${entradasRows}</tbody></table>
+        <h4>Salidas</h4>
+        <table><thead>${saidasHead}</thead><tbody>${saidasRows}</tbody></table>
+        <div class="report-totals">
+          <div class="rt-row"><span>Total de ingresos</span><b>${fmtBRL(totalEntradas)}</b></div>
+          <div class="rt-row"><span>Total de salidas</span><b>${fmtBRL(totalSaidas)}</b></div>
+          <div class="rt-row rt-saldo"><span>Saldo del período</span><b>${fmtBRL(saldoPeriodo)}</b></div>
+        </div>
+      </div>`;
+  }
+
+  async function openReportModal(mode){
+    if(mode === 'interno'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
+    let tipoPeriodo = 'mensal';
+    let opcoes = periodOptionsFor(tipoPeriodo);
+    let selectedValue = opcoes[0] ? opcoes[0].value : null;
+
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'report-modal';
+    const header = document.createElement('div'); header.className = 'report-modal-header';
+    const titleEl = document.createElement('div'); titleEl.className = 'report-modal-header-title';
+    titleEl.textContent = mode === 'publico' ? 'Informe Mural (sin nombres)' : 'Informe Completo';
+
+    const tipoSelect = document.createElement('select');
+    tipoSelect.innerHTML = Object.entries(PERIOD_TYPE_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+    tipoSelect.value = tipoPeriodo;
+
+    const periodoSelect = document.createElement('select');
+    function refreshPeriodoOptions(){
+      opcoes = periodOptionsFor(tipoPeriodo);
+      periodoSelect.innerHTML = opcoes.length
+        ? opcoes.map(o => `<option value="${o.value}">${o.label}</option>`).join('')
+        : `<option value="">Sem dados</option>`;
+      selectedValue = opcoes[0] ? opcoes[0].value : null;
+    }
+    refreshPeriodoOptions();
+
+    header.appendChild(titleEl); header.appendChild(tipoSelect); header.appendChild(periodoSelect);
+    const body = document.createElement('div'); body.className = 'report-modal-body';
+    const actions = document.createElement('div'); actions.className = 'report-modal-actions';
+    actions.innerHTML = `<button type="button" id="btnBaixarRelatorio">⬇ Descargar imagen</button><button type="button" id="btnImprimirRelatorio" class="secondary">🖨 Imprimir</button>`;
+    modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
+    const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    backdrop.appendChild(modal); backdrop.appendChild(closeBtn);
+    document.body.appendChild(backdrop);
+
+    function refreshBody(){
+      if(!selectedValue){
+        body.innerHTML = `<div class="empty-state">Aún no hay datos disponibles para este tipo de período.</div>`;
+        return;
+      }
+      const periodo = parsePeriodo(tipoPeriodo, selectedValue);
+      body.innerHTML = buildReportHtml(periodo, mode);
+    }
+    refreshBody();
+
+    tipoSelect.addEventListener('change', async () => {
+      tipoPeriodo = tipoSelect.value;
+      refreshPeriodoOptions();
+      if(mode === 'interno'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
+      refreshBody();
+    });
+    periodoSelect.addEventListener('change', async () => {
+      selectedValue = periodoSelect.value;
+      if(mode === 'interno'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
+      refreshBody();
+    });
+    modal.querySelector('#btnBaixarRelatorio').addEventListener('click', async () => {
+      const reportEl = body.querySelector('.report');
+      if(!reportEl) return;
+      try{
+        const canvas = await html2canvas(reportEl, { backgroundColor: '#FBF7EC', scale: 2 });
+        const link = document.createElement('a'); link.download = `relatorio-${mode}-${tipoPeriodo}-${selectedValue}.png`;
+        link.href = canvas.toDataURL('image/png'); link.click();
+      } catch(err){ alert('No se pudo generar la imagen del informe. Use la opción Imprimir.'); }
+    });
+    modal.querySelector('#btnImprimirRelatorio').addEventListener('click', () => { printArea.innerHTML = body.innerHTML; window.print(); });
+  }
+  function openEditModal(entry){
+    const isEntrada = entry.tipo === 'entrada';
+    const p = isEntrada ? (privadoCache[entry.id] || {}) : null;
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'edit-modal';
+
+    let fieldsHtml = `
+      <h3>Editar ${isEntrada ? 'ingreso' : 'salida'}</h3>
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" id="editData" value="${entry.data || ''}">
+      </div>
+      <div class="field">
+        <label>Importe (R$)</label>
+        <input type="text" id="editValor" value="${String(entry.valor).replace('.', ',')}">
+      </div>
+    `;
+    if(isEntrada){
+      fieldsHtml += `
+        <div class="field">
+          <label>Nombre de quien pagó</label>
+          <input type="text" id="editNome" value="${escapeHtml(p.nome || '')}">
+        </div>`;
+    } else {
+      fieldsHtml += `
+        <div class="field">
+          <label>Descripción breve</label>
+          <input type="text" id="editDesc" value="${escapeHtml(entry.descricao || '')}">
+        </div>
+        <div class="field">
+          <label>Productos comprados</label>
+          <textarea id="editProdutos">${escapeHtml((entry.produtos || []).join('\n'))}</textarea>
+        </div>`;
+    }
+    fieldsHtml += `
+      <div class="form-error" id="editError"></div>
+      <div class="edit-modal-actions">
+        <button type="button" class="btn-cancelar" id="btnCancelarEdit">Cancelar</button>
+        <button type="button" class="btn-salvar" id="btnSalvarEdit">Guardar</button>
+      </div>`;
+    modal.innerHTML = fieldsHtml;
+    backdrop.appendChild(modal);
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    document.body.appendChild(backdrop);
+
+    modal.querySelector('#btnCancelarEdit').addEventListener('click', () => backdrop.remove());
+    modal.querySelector('#btnSalvarEdit').addEventListener('click', async () => {
+      const editError = modal.querySelector('#editError');
+      const novaData = modal.querySelector('#editData').value || entry.data;
+      const novoValor = parseValor(modal.querySelector('#editValor').value);
+      if(isNaN(novoValor) || novoValor <= 0){ editError.textContent = 'Ingrese un importe válido.'; return; }
+
+      try{
+        if(isEntrada){
+          const novoNome = modal.querySelector('#editNome').value.trim();
+          if(!novoNome){ editError.textContent = 'Ingrese el nombre.'; return; }
+          await movCollection().doc(entry.id).update({ valor: novoValor, data: novaData });
+          await movCollection().doc(entry.id).collection('privado').doc('dados').update({ nome: novoNome });
+          privadoCache[entry.id] = { ...(privadoCache[entry.id]||{}), nome: novoNome };
+        } else {
+          const novaDesc = modal.querySelector('#editDesc').value.trim();
+          const novosProdutos = parseProdutosInput(modal.querySelector('#editProdutos').value);
+          await movCollection().doc(entry.id).update({ valor: novoValor, data: novaData, descricao: novaDesc, produtos: novosProdutos });
+        }
+        backdrop.remove();
+        render();
+      } catch(err){
+        editError.textContent = 'No se pudo guardar la edición.';
+      }
+    });
+  }
+
+  btnRelatorioInterno.addEventListener('click', () => openReportModal('interno'));
+  btnRelatorioPublico.addEventListener('click', () => openReportModal('publico'));
+
+  function anosDisponiveis(){
+    const anos = new Set(entries.filter(e => e.tipo === 'entrada').map(e => (e.data || '').slice(0,4)).filter(Boolean));
+    anos.add(String(new Date().getFullYear()));
+    return [...anos].sort().reverse();
+  }
+
+  function buildControleAnualHtml(ano){
+    const entradasAno = entries.filter(e => e.tipo === 'entrada' && (e.data || '').slice(0,4) === ano);
+
+    const nomesSet = new Set(colaboradoresNomes);
+    entradasAno.forEach(e => { const p = privadoCache[e.id]; if(p && p.nome) nomesSet.add(p.nome); });
+    const nomes = [...nomesSet].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+
+    const grid = {};
+    nomes.forEach(n => { grid[n] = new Array(12).fill(0); });
+    entradasAno.forEach(e => {
+      const p = privadoCache[e.id];
+      if(!p || !p.nome) return;
+      const mes = parseInt((e.data || '').slice(5,7), 10) - 1;
+      if(mes >= 0 && mes < 12){
+        if(!grid[p.nome]) grid[p.nome] = new Array(12).fill(0);
+        grid[p.nome][mes] += e.valor;
+      }
+    });
+
+    const headCols = MESES.map(m => `<th>${m.slice(0,3)}</th>`).join('');
+    const rows = nomes.length
+      ? nomes.map(nome => {
+          const valores = grid[nome] || new Array(12).fill(0);
+          const totalAno = valores.reduce((s,v) => s+v, 0);
+          const cells = valores.map(v => v > 0
+            ? `<td class="controle-check" title="${fmtBRL(v)}">✓</td>`
+            : `<td class="controle-miss">—</td>`
+          ).join('');
+          const nomeAttr = escapeHtml(nome);
+          return `<tr><td>${nomeAttr}</td>${cells}<td class="controle-total">${fmtBRL(totalAno)}</td><td class="controle-actions"><button class="controle-action-btn controle-edit-btn" data-nome="${nomeAttr}" type="button" title="Editar nombre">✎</button><button class="controle-action-btn controle-del-btn" data-nome="${nomeAttr}" type="button" title="Eliminar de la lista">✕</button></td></tr>`;
+        }).join('')
+      : `<tr><td colspan="15" style="text-align:center; font-style:italic; color:var(--ink-soft);">Ningún nombre registrado todavía</td></tr>`;
+
+    const totalGeral = nomes.reduce((s,n) => s + (grid[n] || []).reduce((a,b) => a+b, 0), 0);
+
+    return `
+      <div class="report">
+        <div class="report-title">Control Anual de Contribuyentes — ${ano}</div>
+        <div class="report-subtitle">Caja Mantenimiento · contribución mensual de referencia: 10 Fr por persona</div>
+        <div class="controle-wrap">
+          <table class="controle-table">
+            <thead><tr><th>Nombre</th>${headCols}<th>Total</th><th>Acciones</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div class="controle-note">✓ indica que hubo al menos un pago registrado ese mes (pase el mouse/toque para ver el importe exacto). — indica mes sin pago. Use ✎ para corregir un nombre (ej: unir "María" con "María Silva") o ✕ para quitar a alguien de la lista.</div>
+        <div class="report-totals">
+          <div class="rt-row rt-saldo"><span>Total recaudado en ${ano}</span><b>${fmtBRL(totalGeral)}</b></div>
+        </div>
+      </div>
+    `;
+  }
+
+  async function editarNomeColaborador(nomeAntigo, onDone){
+    const novoNome = prompt(`Corregir nombre de "${nomeAntigo}" a:`, nomeAntigo);
+    if(!novoNome || !novoNome.trim() || novoNome.trim() === nomeAntigo){ return; }
+    const nomeNovo = novoNome.trim();
+    try{
+      const snapshot = await db.collection('colaboradores').where('nome', '==', nomeAntigo).get();
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      await salvarColaboradorSeNovo(nomeNovo);
+
+      const idsParaAtualizar = entries
+        .filter(e => e.tipo === 'entrada' && privadoCache[e.id] && privadoCache[e.id].nome === nomeAntigo)
+        .map(e => e.id);
+      await Promise.all(idsParaAtualizar.map(id =>
+        movCollection().doc(id).collection('privado').doc('dados').update({ nome: nomeNovo })
+      ));
+      idsParaAtualizar.forEach(id => { privadoCache[id] = { ...(privadoCache[id] || {}), nome: nomeNovo }; });
+
+      render();
+      if(onDone) onDone();
+    } catch(err){
+      alert('No se pudo corregir el nombre. Intente de nuevo.');
+    }
+  }
+
+  async function excluirColaborador(nome, onDone){
+    if(!confirm(`¿Quitar a "${nome}" de la lista de colaboradores?\n\nEsto no elimina pagos ya registrados — solo quita el nombre de las sugerencias futuras. Si esta persona ya tiene pagos este año, seguirá apareciendo en el control hasta que edite esos registros en el historial.`)) return;
+    try{
+      const snapshot = await db.collection('colaboradores').where('nome', '==', nome).get();
+      const batch = db.batch();
+      snapshot.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      if(onDone) onDone();
+    } catch(err){
+      alert('No se pudo eliminar. Intente de nuevo.');
+    }
+  }
+
+  function openControleAnualModal(){
+    const anos = anosDisponiveis();
+    let selectedAno = anos[0];
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'report-modal';
+    const header = document.createElement('div'); header.className = 'report-modal-header';
+    const titleEl = document.createElement('div'); titleEl.className = 'report-modal-header-title';
+    titleEl.textContent = 'Control Anual de Contribuyentes';
+    const select = document.createElement('select');
+    select.innerHTML = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+    select.value = selectedAno;
+    header.appendChild(titleEl); header.appendChild(select);
+    const body = document.createElement('div'); body.className = 'report-modal-body';
+    const actions = document.createElement('div'); actions.className = 'report-modal-actions';
+    actions.innerHTML = `<button type="button" id="btnBaixarControle">⬇ Descargar imagen</button><button type="button" id="btnImprimirControle" class="secondary">🖨 Imprimir</button>`;
+    modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    backdrop.appendChild(modal); backdrop.appendChild(closeBtn);
+    document.body.appendChild(backdrop);
+
+    function refreshBody(){
+      body.innerHTML = buildControleAnualHtml(selectedAno);
+      body.querySelectorAll('.controle-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => editarNomeColaborador(btn.dataset.nome, refreshBody));
+      });
+      body.querySelectorAll('.controle-del-btn').forEach(btn => {
+        btn.addEventListener('click', () => excluirColaborador(btn.dataset.nome, refreshBody));
+      });
+    }
+    refreshBody();
+
+    select.addEventListener('change', () => { selectedAno = select.value; refreshBody(); });
+    modal.querySelector('#btnBaixarControle').addEventListener('click', async () => {
+      const reportEl = body.querySelector('.report');
+      try{
+        const canvas = await html2canvas(reportEl, { backgroundColor: '#FBF7EC', scale: 2 });
+        const link = document.createElement('a');
+        link.download = `controle-anual-${selectedAno}.png`;
+        link.href = canvas.toDataURL('image/png'); link.click();
+      } catch(err){ alert('No se pudo generar la imagen. Use la opción Imprimir.'); }
+    });
+    modal.querySelector('#btnImprimirControle').addEventListener('click', () => {
+      printArea.innerHTML = body.innerHTML;
+      window.print();
+    });
+  }
+  btnControleAnual.addEventListener('click', openControleAnualModal);
+
+  function render(){
+    const monthOptions = monthsAvailable();
+    const prevSelected = monthFilter.value;
+    monthFilter.innerHTML = '<option value="">Todos os meses</option>' +
+      monthOptions.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join('');
+    if(monthOptions.includes(prevSelected)) monthFilter.value = prevSelected;
+    const monthValue = monthFilter.value;
+
+    const sorted = [...entries].sort((a,b) => {
+      if(a.data !== b.data) return a.data < b.data ? 1 : -1;
+      return (b.createdAt||0) - (a.createdAt||0);
+    });
+    const monthFiltered = monthValue ? sorted.filter(e => (e.data||'').slice(0,7) === monthValue) : sorted;
+    const filtered = searchTerm
+      ? monthFiltered.filter(e => {
+          if(e.tipo === 'entrada'){ const nome = (privadoCache[e.id]||{}).nome || ''; return currentRole === 'admin' ? nome.toLowerCase().includes(searchTerm) : false; }
+          const hay = [(e.descricao||''), ...(e.produtos||[])].join(' ').toLowerCase();
+          return hay.includes(searchTerm);
+        })
+      : monthFiltered;
+
+    if(entries.length === 0){
+      listArea.innerHTML = `<div class="empty-state"><div class="stamp-outline">💰</div>Aún no hay movimientos.</div>`;
+    } else if(filtered.length === 0){
+      listArea.innerHTML = `<div class="empty-state">Sin resultados para "${escapeHtml(searchTerm)}".</div>`;
+    } else {
+      listArea.innerHTML = '';
+      filtered.forEach(e => {
+        const row = document.createElement('div');
+        row.className = 'entry' + (e.tipo === 'saida' ? ' saida' : '');
+        let thumbHtml;
+        if(e.tipo === 'saida' && e.foto){ thumbHtml = `<img class="entry-thumb" src="${e.foto}" alt="Comprobante">`; }
+        else { thumbHtml = `<div class="entry-icon">${e.tipo === 'entrada' ? '💰' : '🧾'}</div>`; }
+        const sinal = e.tipo === 'entrada' ? '+ ' : '− ';
+        let titulo, descLine, produtosHtml = '';
+        if(e.tipo === 'entrada'){
+          const isAdmin = currentRole === 'admin';
+          const p = privadoCache[e.id] || {};
+          titulo = isAdmin ? (p.nome || '...') : 'Ingreso';
+          descLine = (isAdmin && p.receiptNumber ? p.receiptNumber + ' · ' : '') + 'Ingreso de dinero';
+        } else {
+          titulo = e.descricao || (e.produtos && e.produtos[0]) || 'Salida de la caja';
+          descLine = 'Salida de la caja';
+          if(e.produtos && e.produtos.length){ produtosHtml = `<div class="entry-produtos">${e.produtos.map(p => `<span class="produto-tag">${escapeHtml(p)}</span>`).join('')}</div>`; }
+        }
+        row.innerHTML = `
+          ${thumbHtml}
+          <div class="entry-main">
+            <div class="entry-name">${escapeHtml(titulo)}</div>
+            <div class="entry-desc">${descLine}</div>
+            ${produtosHtml}
+            <div class="entry-date">${fmtDateISO(e.data)}</div>
+          </div>
+          <div class="entry-side">
+            <div class="entry-amount">${sinal}${fmtBRL(e.valor)}</div>
+            <div class="entry-actions">
+              ${e.tipo === 'entrada' ? '<button class="recibo-link" type="button">Ver recibo</button>' : ''}
+              ${currentRole === 'admin' ? '<button class="recibo-link editar-link" type="button">Editar</button>' : ''}
+              ${currentRole === 'admin' ? '<button class="entry-del" title="Eliminar registro">✕</button>' : ''}
+            </div>
+          </div>`;
+        if(e.tipo === 'saida' && e.foto){ row.querySelector('.entry-thumb').addEventListener('click', () => openModal(e.foto)); }
+        const reciboBtn = row.querySelector('.recibo-link:not(.editar-link)');
+        if(reciboBtn){ reciboBtn.addEventListener('click', () => { const p = privadoCache[e.id] || {}; openReceiptModal({ ...e, nome: p.nome, receiptNumber: p.receiptNumber }); }); }
+        const editarBtn = row.querySelector('.editar-link');
+        if(editarBtn){ editarBtn.addEventListener('click', () => openEditModal(e)); }
+        const delBtn = row.querySelector('.entry-del');
+        if(delBtn){ delBtn.addEventListener('click', () => deleteEntry(e.id, e.tipo)); }
+        listArea.appendChild(row);
+      });
+    }
+
+    const totalEntradas = entries.filter(e => e.tipo === 'entrada').reduce((s,e) => s + e.valor, 0);
+    const totalSaidas = entries.filter(e => e.tipo === 'saida').reduce((s,e) => s + e.valor, 0);
+    const saldo = totalEntradas - totalSaidas;
+    const countEntradas = entries.filter(e => e.tipo === 'entrada').length;
+    const countSaidas = entries.filter(e => e.tipo === 'saida').length;
+    saldoValue.textContent = fmtBRL(saldo);
+    saldoValue.classList.toggle('negative', saldo < 0);
+    summaryTotal.textContent = fmtBRL(saldo);
+    saldoSub.textContent = `${countEntradas} ${countEntradas === 1 ? 'entrada' : 'entradas'} · ${countSaidas} ${countSaidas === 1 ? 'saída' : 'saídas'}`;
+    miniEntradas.textContent = fmtBRL(totalEntradas);
+    miniSaidas.textContent = fmtBRL(totalSaidas);
+  }
+
+  initFirebase();
+})();
+</script>
+
+</body>
+</html>
