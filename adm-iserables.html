@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Caja Mantenimiento</title>
+<title>ADM Isèrables</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -427,8 +427,8 @@
 
 <div class="login-screen" id="loginScreen">
   <div class="login-card">
-    <div class="stamp-logo">CAJA<br>MANT.</div>
-    <h2>Caja Mantenimiento</h2>
+    <div class="stamp-logo">ADM<br>ISÈ.</div>
+    <h2>ADM Isèrables</h2>
     <p>Ingresar al panel</p>
     <div class="login-role-row">
       <button class="role-btn" id="btnRoleAdmin" type="button">Entrar</button>
@@ -447,9 +447,9 @@
 
 <div class="topbar">
   <div class="topbar-inner">
-    <div class="stamp-logo">CAJA<br>MANTENIMIENTO</div>
+    <div class="stamp-logo">ADM<br>ISÈRABLES</div>
     <div>
-      <h1 id="topbarTitle">Caja Mantenimiento</h1>
+      <h1 id="topbarTitle">ADM Isèrables</h1>
       <p>Datos compartidos en tiempo real</p>
     </div>
     <div class="topbar-right">
@@ -726,7 +726,7 @@
     document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === grupo));
     document.querySelectorAll('.caixa-subtab').forEach(btn => btn.classList.toggle('active', btn.dataset.caixa === caixa));
     aluguelSubTabs.style.display = grupo === 'aluguel' ? 'flex' : 'none';
-    topbarTitle.textContent = CAIXA_LABELS[caixa];
+    // topbarTitle fica fixo como "ADM Isèrables" — não muda por caixa
     updateMetaBanner();
     updateControleAnualVisibility();
     entries = []; privadoCache = {};
@@ -1080,7 +1080,7 @@
       <div class="receipt" id="receiptCard">
         <div class="r2-orgheader">
           IGLESIA GNÓSTICA CRISTIANA UNIVERSAL SAMAEL AUN WEOR
-          <span class="r2-orgheader-country">ISÉRABLES / SUIZA</span>
+          <span class="r2-orgheader-country">ISÈRABLES / SUIZA</span>
         </div>
         <div class="r2-header">
           <div class="r2-logo">CAIXA<br>${isAnonimo ? 'FUNDO' : 'PAGO'}</div>
@@ -1105,7 +1105,7 @@
         </div>
 
         ${deRow}
-        <div class="r2-field"><div class="r2-field-label">Referente a</div><div class="r2-field-value">${CAIXA_LABELS[currentCaixa]} Lumisial de Isérables</div></div>
+        <div class="r2-field"><div class="r2-field-label">Referente a</div><div class="r2-field-value">${CAIXA_LABELS[currentCaixa]} Lumisial de Isèrables</div></div>
         <div class="r2-field"><div class="r2-field-label">Fecha</div><div class="r2-field-value">${fmtDateISO(entry.data)}</div></div>
 
         <div class="r2-thanks">— recibido con agradecimiento —</div>
