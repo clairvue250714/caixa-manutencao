@@ -1010,18 +1010,31 @@
       projetosListaBody.innerHTML = `<div class="empty-state">Aún no hay proyectos.${currentRole === 'admin' ? ' Cree uno con el botón de arriba.' : ''}</div>`;
       return;
     }
+    const isAdmin = currentRole === 'admin';
     projetosListaBody.innerHTML = ordenados.map(p => `
       <div class="projeto-card ${p.status === 'fechado' ? 'fechado' : ''}" data-id="${p.id}">
         <div class="projeto-card-top">
           <span class="projeto-card-nome">${escapeHtml(p.nome)}</span>
-          <span class="projeto-card-status ${p.status === 'fechado' ? 'fechado' : 'aberto'}">${p.status === 'fechado' ? 'Cerrado' : 'Abierto'}</span>
+          <span style="display:flex; align-items:center; gap:8px;">
+            <span class="projeto-card-status ${p.status === 'fechado' ? 'fechado' : 'aberto'}">${p.status === 'fechado' ? 'Cerrado' : 'Abierto'}</span>
+            ${isAdmin ? `<button class="controle-action-btn controle-del-btn projeto-del-btn" data-id="${p.id}" data-nome="${escapeHtml(p.nome)}" type="button" title="Eliminar proyecto por completo">✕</button>` : ''}
+          </span>
         </div>
         ${p.descricao ? `<div class="projeto-card-desc">${escapeHtml(p.descricao)}</div>` : ''}
         <div class="projeto-card-saldo" id="projetoSaldo_${p.id}">Cargando saldo...</div>
       </div>
     `).join('');
     projetosListaBody.querySelectorAll('.projeto-card').forEach(card => {
-      card.addEventListener('click', () => switchCaixa('projeto:' + card.dataset.id));
+      card.addEventListener('click', (e) => {
+        if(e.target.closest('.projeto-del-btn')) return;
+        switchCaixa('projeto:' + card.dataset.id);
+      });
+    });
+    projetosListaBody.querySelectorAll('.projeto-del-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await excluirProjeto(btn.dataset.id, btn.dataset.nome);
+      });
     });
     ordenados.forEach(async (p) => {
       try{
@@ -1039,6 +1052,20 @@
         if(el) el.textContent = '';
       }
     });
+  }
+
+  async function excluirProjeto(projetoId, nome){
+    if(!confirm(`¿Eliminar el proyecto "${nome}" por completo?\n\nEsto borra también todos sus movimientos y comprobantes guardados dentro de él. Esta acción no se puede deshacer.`)) return;
+    try{
+      const movSnap = await db.collection('projetos').doc(projetoId).collection('movimentos').get();
+      for(const doc of movSnap.docs){
+        await doc.ref.collection('privado').doc('dados').delete().catch(() => {});
+        await doc.ref.delete();
+      }
+      await db.collection('projetos').doc(projetoId).delete();
+    } catch(err){
+      alert('No se pudo eliminar el proyecto. Verifique su conexión.');
+    }
   }
 
   btnNuevoProyecto.addEventListener('click', async () => {
