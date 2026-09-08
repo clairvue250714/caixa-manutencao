@@ -13,52 +13,18 @@
      FIREBASE — banco de dados compartilhado
      PASSO 1) Crie um projeto grátis em https://console.firebase.google.com
      PASSO 2) Ative "Firestore Database" (modo produção, região próxima)
-     PASSO 3) Ative "Authentication" > método "Anônimo" (Anonymous) — é só isso por
-              enquanto, não precisa criar contas nem senhas ainda.
-     PASSO 4) Em Configurações do projeto > Geral > "Seus apps" > Web (</>),
+     PASSO 3) Ative "Authentication" > método "Anônimo" (Anonymous) — é o que
+              permite os MEMBROS entrarem direto, sem senha.
+     PASSO 4) Ative também "Authentication" > método "E-mail/senha" — é o que
+              protege o ADM e o desbloqueio de nomes.
+     PASSO 5) Em Authentication > Users, crie DUAS contas manualmente, cada uma
+              com a senha que você quiser:
+                - admin@caixa-manutencao.local           → senha do administrador
+                - membro-nombres@caixa-manutencao.local  → código extra que libera
+                  ver os nomes dentro da visão de membro (continua sem poder editar)
+     PASSO 6) Em Configurações do projeto > Geral > "Seus apps" > Web (</>),
               copie o objeto de configuração e cole no lugar do exemplo abaixo.
-     PASSO 5) Em Firestore > Regras, cole a versão "SEM SENHA" abaixo por enquanto.
-
-     ---- REGRAS SEM SENHA (usar agora) ----
-        rules_version = '2';
-        service cloud.firestore {
-          match /databases/{database}/documents {
-            match /caixa_manutencao/{id} {
-              allow read, write: if request.auth != null;
-              match /privado/{doc} { allow read, write: if request.auth != null; }
-            }
-            match /caixa_aluguel_geral/{id} {
-              allow read, write: if request.auth != null;
-              match /privado/{doc} { allow read, write: if request.auth != null; }
-            }
-            match /caixa_aluguel_luz/{id} {
-              allow read, write: if request.auth != null;
-              match /privado/{doc} { allow read, write: if request.auth != null; }
-            }
-            match /caixa_aluguel_imposto/{id} {
-              allow read, write: if request.auth != null;
-              match /privado/{doc} { allow read, write: if request.auth != null; }
-            }
-            match /caixa_aluguel_emergencia/{id} {
-              allow read, write: if request.auth != null;
-              match /privado/{doc} { allow read, write: if request.auth != null; }
-            }
-            match /colaboradores/{id} {
-              allow read, write: if request.auth != null;
-            }
-            match /membros_numerados/{id} {
-              allow read, write: if request.auth != null;
-            }
-          }
-        }
-     ⚠ Nesta fase, qualquer pessoa que entrar (ADM ou MEMBRO) consegue tecnicamente
-     acessar tudo no banco de dados se forçar a mão — a separação ADM/MEMBRO é só
-     de tela. Bom pra testar, não pra usar de verdade com gente de fora.
-
-     ---- REGRAS COM SENHA (trocar para esta quando ativarmos login) ----
-     Nesse momento também: ative "Authentication" > método "E-mail/senha" e crie
-     duas contas — admin@caixa-manutencao.local e membro@caixa-manutencao.local —
-     cada uma com a senha que você quiser. Depois troque as regras do Firestore por:
+     PASSO 7) Em Firestore > Regras, cole exatamente isto:
 
         rules_version = '2';
         service cloud.firestore {
@@ -66,30 +32,36 @@
             function souAdmin() {
               return request.auth != null && request.auth.token.email == 'admin@caixa-manutencao.local';
             }
+            function souAdminOuVeNombres() {
+              return request.auth != null && (
+                request.auth.token.email == 'admin@caixa-manutencao.local' ||
+                request.auth.token.email == 'membro-nombres@caixa-manutencao.local'
+              );
+            }
             match /caixa_manutencao/{id} {
               allow read: if request.auth != null;
               allow create, update, delete: if souAdmin();
-              match /privado/{doc} { allow read, write: if souAdmin(); }
+              match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
             }
             match /caixa_aluguel_geral/{id} {
               allow read: if request.auth != null;
               allow create, update, delete: if souAdmin();
-              match /privado/{doc} { allow read, write: if souAdmin(); }
+              match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
             }
             match /caixa_aluguel_luz/{id} {
               allow read: if request.auth != null;
               allow create, update, delete: if souAdmin();
-              match /privado/{doc} { allow read, write: if souAdmin(); }
+              match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
             }
             match /caixa_aluguel_imposto/{id} {
               allow read: if request.auth != null;
               allow create, update, delete: if souAdmin();
-              match /privado/{doc} { allow read, write: if souAdmin(); }
+              match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
             }
             match /caixa_aluguel_emergencia/{id} {
               allow read: if request.auth != null;
               allow create, update, delete: if souAdmin();
-              match /privado/{doc} { allow read, write: if souAdmin(); }
+              match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
             }
             match /colaboradores/{id} {
               allow read: if request.auth != null;
@@ -98,8 +70,21 @@
             match /membros_numerados/{id} {
               allow read, write: if souAdmin();
             }
+            match /projetos/{id} {
+              allow read: if request.auth != null;
+              allow create, update, delete: if souAdmin();
+              match /movimentos/{movId} {
+                allow read: if request.auth != null;
+                allow create, update, delete: if souAdmin();
+                match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
+              }
+            }
           }
         }
+
+     ⚠ Nem administrador nem "ver nombres" conseguem criar, editar ou apagar nada
+     além do que as regras acima liberam — só o admin cria/edita/apaga movimentos.
+     "membro-nombres" só ganha permissão extra de LEITURA dos nomes, nada mais.
      ============================================================ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -115,6 +100,7 @@
   };
   const ADMIN_EMAIL = 'admin@caixa-manutencao.local';
   const MEMBER_EMAIL = 'membro@caixa-manutencao.local';
+  const MEMBER_NAMES_EMAIL = 'membro-nombres@caixa-manutencao.local';
 </script>
 
 <style>
@@ -242,6 +228,27 @@
     border: 1.5px solid var(--kraft-dark); background: var(--paper); color: var(--ink-soft);
     font-family:'Inter', sans-serif; font-weight:600; font-size: 12px; cursor:pointer; transition: all .15s ease; }
   .caixa-subtab.active{ background: var(--ledger-green); border-color: var(--ledger-green); color: var(--paper); }
+
+  .projetos-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px; flex-wrap:wrap; }
+  .projetos-header h2{ font-family:'Fraunces', serif; font-size: 19px; color: var(--ledger-green-dark); margin:0; }
+  .projetos-intro{ font-size: 12.5px; color: var(--ink-soft); margin: 0 0 16px; }
+  .projeto-card{ background: var(--paper); border: 1px solid var(--kraft-dark); border-left: 4px solid var(--ledger-green);
+    border-radius: var(--radius); padding: 13px 14px; margin-bottom: 10px; cursor:pointer; transition: box-shadow .15s ease; }
+  .projeto-card:hover{ box-shadow: 0 2px 8px rgba(27,67,50,0.12); }
+  .projeto-card.fechado{ border-left-color: var(--ink-soft); opacity: 0.75; }
+  .projeto-card-top{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .projeto-card-nome{ font-weight:700; font-size: 15px; color: var(--ink); }
+  .projeto-card-status{ font-size: 9.5px; padding: 2px 9px; border-radius:999px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .projeto-card-status.aberto{ background: rgba(45,106,79,0.14); color: #2D6A4F; }
+  .projeto-card-status.fechado{ background: rgba(92,90,78,0.14); color: var(--ink-soft); }
+  .projeto-card-desc{ font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+  .projeto-card-saldo{ font-family:'IBM Plex Mono', monospace; font-size: 13px; font-weight:600; margin-top: 6px; color: var(--ledger-green-dark); }
+  .projeto-back-link{ font-size: 12px; color: var(--ink-soft); text-decoration: underline; cursor:pointer; background:none; border:none;
+    display:inline-flex; align-items:center; gap:5px; margin-bottom: 10px; }
+  .projeto-close-toggle{ font-size: 11px; padding: 5px 12px; border-radius: 999px; border: 1.5px solid var(--ink-soft);
+    background: none; color: var(--ink-soft); cursor:pointer; font-weight:600; }
+  .projeto-fechado-aviso{ clear:both; background: #FFF3D6; border: 1.5px solid var(--gold); border-radius: var(--radius);
+    padding: 10px 14px; margin-top: 10px; font-size: 12.5px; color: #5A4413; font-weight:600; }
 
   .top-actions{ display:flex; justify-content:flex-end; margin-bottom: 8px; }
   .reset-link{ font-size: 11.5px; color: var(--kraft-dark); text-decoration: underline; cursor:pointer; background:none; border:none; }
@@ -402,6 +409,10 @@
   .controle-check{ color:#2D6A4F; font-weight:700; font-size: 14px; }
   .controle-miss{ color: var(--stamp-red); opacity:0.45; }
   .controle-total{ font-family:'IBM Plex Mono', monospace; font-weight:600; color: var(--ledger-green-dark); }
+  .membro-status-tag{ font-size: 9.5px; padding: 1px 7px; border-radius: 999px; font-weight:700;
+    text-transform: uppercase; letter-spacing:.03em; background: rgba(169,58,46,0.12); color: var(--stamp-red); margin-left: 6px; }
+  .membro-row-retirado{ opacity: 0.6; }
+
   .controle-actions{ display:flex; gap:4px; justify-content:center; }
   .controle-action-btn{ border:none; background:none; cursor:pointer; font-size: 13px; padding: 3px 5px;
     border-radius: 4px; color: var(--ink-soft); }
@@ -438,6 +449,17 @@
   .report-totals .rt-row b{ font-family:'IBM Plex Mono', monospace; color: var(--ink); }
   .report-totals .rt-saldo{ font-weight:700; font-size:15.5px; margin-top:6px; border-top:1px dashed var(--line); padding-top:8px; color: var(--ledger-green-dark); }
 
+  .comp-print-header{ font-family: 'Fraunces', serif; font-size:16px; color: var(--ledger-green-dark); margin-bottom: 14px; }
+  .comp-print-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .comp-item{ border:1px solid #ccc; border-radius:4px; padding:8px; break-inside: avoid; }
+  .comp-item img{ width:100%; height: 220px; object-fit: contain; display:block; background:#f4f4f4; }
+  .comp-caption{ font-size: 11px; margin-top:6px; font-family:'Inter', sans-serif; color:#333; line-height:1.5; }
+  .comp-caption b{ font-family:'IBM Plex Mono', monospace; }
+  .comp-empty{ padding:40px; text-align:center; font-family:'Inter', sans-serif; color: var(--ink-soft); }
+  @media print{
+    .comp-item:nth-child(4n){ break-after: page; }
+  }
+
   @media print{
     body > *:not(.print-area){ display:none !important; }
     .print-area{ display:block !important; }
@@ -459,10 +481,15 @@
   <div class="login-card">
     <div class="stamp-logo">ADM<br>ISÈ.</div>
     <h2>ADM Isèrables</h2>
-    <p>Ingresar al panel</p>
+    <p>MEMBRO entra directo · ADM pide contraseña</p>
     <div class="login-role-row">
       <button class="role-btn" id="btnRoleAdmin" type="button">ADM</button>
       <button class="role-btn" id="btnRoleMembro" type="button">MEMBRO</button>
+    </div>
+    <div id="loginPasswordArea" style="display:none;">
+      <label for="loginPassword">Contraseña</label>
+      <input type="password" id="loginPassword" placeholder="Ingrese la contraseña">
+      <button class="login-submit" id="btnLoginSubmit" type="button">Entrar</button>
     </div>
     <div id="loginError" class="form-error"></div>
     <div class="login-setup-note" id="loginSetupNote" style="display:none;">
@@ -485,6 +512,7 @@
     </div>
     <div class="topbar-right">
       <span class="role-badge" id="roleBadge">membro</span>
+      <button class="logout-link" id="btnDesbloquearNombres" type="button" style="display:none;">🔓 ver nombres</button>
       <button class="logout-link" id="logoutBtn" type="button">salir</button>
     </div>
   </div>
@@ -493,6 +521,7 @@
 <div class="caixa-tabs" id="caixaTabsRow">
   <button class="caixa-tab active" data-group="manutencao" type="button">🔧 Mantenimiento</button>
   <button class="caixa-tab" data-group="aluguel" type="button">🏠 Alquiler</button>
+  <button class="caixa-tab" data-group="projetos" id="tabGroupProjetos" type="button">📁 Proyectos</button>
 </div>
 
 <div class="caixa-subtabs" id="aluguelSubTabs" style="display:none;">
@@ -504,6 +533,19 @@
 
 <div class="wrap">
 
+  <div id="projetosListArea" style="display:none;">
+    <div class="projetos-header">
+      <h2>📁 Proyectos</h2>
+      <button class="report-btn" id="btnNuevoProyecto" type="button" style="display:none; flex:0 0 auto;">+ Nuevo Proyecto</button>
+    </div>
+    <p class="projetos-intro">Proyectos puntuales (con inicio y fin), separados de las cajas fijas — por ejemplo, comprar cerámica para un espacio común.</p>
+    <div id="projetosListaBody"><div class="status-msg">Cargando proyectos...</div></div>
+  </div>
+
+  <div id="caixaContentArea">
+
+  <div id="projetoDetailHeader" style="display:none;"></div>
+
   <div class="meta-banner" id="metaBanner" style="display:none;"></div>
 
   <div class="progress-section" id="progressSection" style="display:none;">
@@ -511,7 +553,7 @@
       <div class="progress-label"><span>Participación de miembros (este mes)</span><b id="progressMembrosText">0 / 0</b></div>
       <div class="progress-bar-track"><div class="progress-bar-fill" id="progressMembrosFill" style="width:0%;"></div></div>
     </div>
-    <div class="progress-block">
+    <div class="progress-block" id="progressValorBlock">
       <div class="progress-label"><span>Recaudado este mes</span><b id="progressValorText">R$ 0,00 / R$ 0,00</b></div>
       <div class="progress-bar-track"><div class="progress-bar-fill valor" id="progressValorFill" style="width:0%;"></div></div>
     </div>
@@ -530,6 +572,7 @@
     <button class="report-btn public" id="btnRelatorioPublico" type="button">🌐 Informe Mural (sin nombres)</button>
     <button class="report-btn" id="btnControleAnual" type="button" style="display:none;">📅 Control Anual de Contribuyentes</button>
     <button class="report-btn" id="btnGerenciarMembros" type="button" style="display:none;">👥 Gestionar Miembros</button>
+    <button class="report-btn" id="btnImprimirComprobantes" type="button" style="display:none;">🧾 Imprimir Comprobantes</button>
   </div>
 
   <div class="membro-lookup" id="membroLookupBlock" style="display:none;">
@@ -612,9 +655,11 @@
     <div class="status-msg">Cargando registros...</div>
   </div>
 
+  </div><!-- /caixaContentArea -->
+
 </div>
 
-<div class="summary">
+<div class="summary" id="summaryBar">
   <div class="summary-inner">
     <div class="summary-mini">
       <span>Ingresos <b id="miniEntradas">R$ 0,00</b></span>
@@ -667,6 +712,9 @@
     aluguel_emergencia: 'aluguel'
   };
   let currentCaixa = 'manutencao';
+  let projetosCache = []; // [{id, nome, descricao, status, createdAt}]
+  let unsubscribeProjetos = null;
+  let viewingProjetosList = false;
   let colaboradoresNomes = [];
   let unsubscribeColaboradores = null;
   let entries = [];
@@ -677,6 +725,7 @@
   let db = null;
   let auth = null;
   let currentRole = null;
+  let canSeeNames = false;
   let unsubscribeSnapshot = null;
 
   const loginScreen = document.getElementById('loginScreen');
@@ -684,6 +733,9 @@
   const btnRoleAdmin = document.getElementById('btnRoleAdmin');
   const btnRoleMembro = document.getElementById('btnRoleMembro');
   const loginError = document.getElementById('loginError');
+  const loginPasswordArea = document.getElementById('loginPasswordArea');
+  const loginPassword = document.getElementById('loginPassword');
+  const btnDesbloquearNombres = document.getElementById('btnDesbloquearNombres');
   const loginSetupNote = document.getElementById('loginSetupNote');
   const roleBadge = document.getElementById('roleBadge');
   const logoutBtn = document.getElementById('logoutBtn');
@@ -694,8 +746,16 @@
   const progressMembrosText = document.getElementById('progressMembrosText');
   const progressMembrosFill = document.getElementById('progressMembrosFill');
   const progressValorText = document.getElementById('progressValorText');
+  const progressValorBlock = document.getElementById('progressValorBlock');
   const progressValorFill = document.getElementById('progressValorFill');
   const aluguelSubTabs = document.getElementById('aluguelSubTabs');
+  const tabGroupProjetos = document.getElementById('tabGroupProjetos');
+  const projetosListArea = document.getElementById('projetosListArea');
+  const caixaContentArea = document.getElementById('caixaContentArea');
+  const summaryBar = document.getElementById('summaryBar');
+  const projetosListaBody = document.getElementById('projetosListaBody');
+  const btnNuevoProyecto = document.getElementById('btnNuevoProyecto');
+  const projetoDetailHeader = document.getElementById('projetoDetailHeader');
 
   const listArea = document.getElementById('listArea');
   const monthFilter = document.getElementById('monthFilter');
@@ -724,6 +784,7 @@
   const btnRelatorioPublico = document.getElementById('btnRelatorioPublico');
   const btnControleAnual = document.getElementById('btnControleAnual');
   const btnGerenciarMembros = document.getElementById('btnGerenciarMembros');
+  const btnImprimirComprobantes = document.getElementById('btnImprimirComprobantes');
   const membroLookupBlock = document.getElementById('membroLookupBlock');
   const membroNumeroInput = document.getElementById('membroNumeroInput');
   const membroLookupResult = document.getElementById('membroLookupResult');
@@ -761,12 +822,31 @@
     div.textContent = str == null ? '' : str;
     return div.innerHTML;
   }
+  function isProjeto(caixa){
+    return typeof caixa === 'string' && caixa.startsWith('projeto:');
+  }
+  function projetoIdDe(caixa){
+    return caixa.slice('projeto:'.length);
+  }
+  function getCaixaLabel(caixa){
+    if(isProjeto(caixa)){
+      const p = projetosCache.find(pr => pr.id === projetoIdDe(caixa));
+      return p ? `📁 ${p.nome}` : 'Proyecto';
+    }
+    return CAIXA_LABELS[caixa] || caixa;
+  }
+  function getReceiptPrefix(caixa){
+    return isProjeto(caixa) ? 'PRJ' : (CAIXA_RECEIPT_PREFIX[caixa] || 'GEN');
+  }
   function nextReceiptNumber(){
     const nums = Object.values(privadoCache).map(p => p && p.receiptNumber ? parseInt(String(p.receiptNumber).replace(/\D/g,''),10) : NaN).filter(n => !isNaN(n));
     const max = nums.length ? Math.max(...nums) : 0;
-    return 'REC-' + CAIXA_RECEIPT_PREFIX[currentCaixa] + '-' + String(max + 1).padStart(4, '0');
+    return 'REC-' + getReceiptPrefix(currentCaixa) + '-' + String(max + 1).padStart(4, '0');
   }
   function movCollection(){
+    if(isProjeto(currentCaixa)){
+      return db.collection('projetos').doc(projetoIdDe(currentCaixa)).collection('movimentos');
+    }
     return db.collection(CAIXA_COLLECTIONS[currentCaixa]);
   }
 
@@ -789,50 +869,185 @@
     const entradasMes = entries.filter(e => e.tipo === 'entrada' && (e.data || '').slice(0,7) === mesAtual);
     const totalArrecadado = entradasMes.reduce((s,e) => s + e.valor, 0);
     const numerosQueContribuiram = new Set(entradasMes.map(e => e.numeroMembro).filter(Boolean));
-    const totalMembros = membrosNumerados.length;
-    const metaValor = currentCaixa === 'aluguel_geral' ? 1500 : (totalMembros * 10);
+    const totalMembros = membrosNumerados.filter(m => m.status !== 'retirado').length;
+    const temMeta = currentCaixa === 'aluguel_geral';
+    const metaValor = temMeta ? 1500 : null;
 
     const pctMembros = totalMembros > 0 ? Math.min(100, (numerosQueContribuiram.size / totalMembros) * 100) : 0;
-    const pctValor = metaValor > 0 ? Math.min(100, (totalArrecadado / metaValor) * 100) : 0;
 
     progressMembrosText.textContent = `${numerosQueContribuiram.size} / ${totalMembros}`;
     progressMembrosFill.style.width = pctMembros + '%';
-    progressValorText.textContent = `${fmtBRL(totalArrecadado)} / ${fmtBRL(metaValor)}`;
-    progressValorFill.style.width = pctValor + '%';
+
+    progressValorBlock.style.display = temMeta ? 'block' : 'none';
+    if(temMeta){
+      const pctValor = metaValor > 0 ? Math.min(100, (totalArrecadado / metaValor) * 100) : 0;
+      progressValorText.textContent = `${fmtBRL(totalArrecadado)} / ${fmtBRL(metaValor)}`;
+      progressValorFill.style.width = pctValor + '%';
+    }
   }
 
   function updateControleAnualVisibility(){
     btnControleAnual.style.display = (currentRole === 'admin' && currentCaixa === 'manutencao') ? '' : 'none';
   }
 
+  function grupoDeCaixa(caixa){
+    if(isProjeto(caixa)) return 'projetos';
+    return CAIXA_GROUP[caixa];
+  }
+
   function switchCaixa(caixa){
     currentCaixa = caixa;
-    const grupo = CAIXA_GROUP[caixa];
+    viewingProjetosList = false;
+    const grupo = grupoDeCaixa(caixa);
     document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === grupo));
     document.querySelectorAll('.caixa-subtab').forEach(btn => btn.classList.toggle('active', btn.dataset.caixa === caixa));
     aluguelSubTabs.style.display = grupo === 'aluguel' ? 'flex' : 'none';
+    projetosListArea.style.display = 'none';
+    caixaContentArea.style.display = 'block';
+    summaryBar.style.display = 'block';
+    if(isProjeto(caixa)){
+      const p = projetosCache.find(pr => pr.id === projetoIdDe(caixa));
+      const fechado = p && p.status === 'fechado';
+      projetoDetailHeader.style.display = 'block';
+      projetoDetailHeader.innerHTML = `
+        <button class="projeto-back-link" id="btnVolverProyectos" type="button">← Volver a Proyectos</button>
+        ${currentRole === 'admin' ? `<button class="projeto-close-toggle" id="btnToggleCerrarProyecto" data-fechado="${fechado ? '1' : '0'}" type="button" style="float:right;">${fechado ? '↺ Reabrir proyecto' : '🔒 Cerrar proyecto'}</button>` : ''}
+        ${(fechado && currentRole === 'admin') ? `<div class="projeto-fechado-aviso">🔒 Este proyecto está cerrado — reábralo arriba para agregar más movimientos.</div>` : ''}
+      `;
+      projetoDetailHeader.querySelector('#btnVolverProyectos').addEventListener('click', showProjetosList);
+      const toggleBtn = projetoDetailHeader.querySelector('#btnToggleCerrarProyecto');
+      if(toggleBtn){
+        toggleBtn.addEventListener('click', async () => {
+          const estaFechado = toggleBtn.dataset.fechado === '1';
+          try{
+            await db.collection('projetos').doc(projetoIdDe(caixa)).update({ status: estaFechado ? 'aberto' : 'fechado' });
+          } catch(err){ alert('No se pudo actualizar el estado del proyecto.'); }
+        });
+      }
+    } else {
+      projetoDetailHeader.style.display = 'none';
+      projetoDetailHeader.innerHTML = '';
+    }
+    updateAdminFormVisibility();
     // topbarTitle fica fixo como "ADM Isèrables" — não muda por caixa
     updateMetaBanner();
     updateControleAnualVisibility();
     btnGerenciarMembros.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
+    btnImprimirComprobantes.style.display = (currentRole === 'admin') ? '' : 'none';
     membroLookupBlock.style.display = (currentRole === 'membro' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     entries = []; privadoCache = {};
     searchTerm = ''; document.getElementById('searchInput').value = '';
     render();
     if(currentRole){ attachSnapshot(); if(currentRole === 'admin') switchTipo('entrada'); }
   }
+
+  function showProjetosList(){
+    viewingProjetosList = true;
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === 'projetos'));
+    document.querySelectorAll('.caixa-subtab').forEach(btn => btn.classList.remove('active'));
+    aluguelSubTabs.style.display = 'none';
+    caixaContentArea.style.display = 'none';
+    summaryBar.style.display = 'none';
+    projetosListArea.style.display = 'block';
+    btnNuevoProyecto.style.display = currentRole === 'admin' ? '' : 'none';
+    renderProjetosList();
+  }
+
   document.querySelectorAll('.caixa-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       const grupo = btn.dataset.group;
-      if(grupo === CAIXA_GROUP[currentCaixa]) return;
+      if(grupo === 'projetos'){ showProjetosList(); return; }
+      if(!viewingProjetosList && grupo === grupoDeCaixa(currentCaixa)) return;
       switchCaixa(grupo === 'aluguel' ? 'aluguel_geral' : 'manutencao');
     });
   });
   document.querySelectorAll('.caixa-subtab').forEach(btn => {
     btn.addEventListener('click', () => {
-      if(btn.dataset.caixa === currentCaixa) return;
+      if(!viewingProjetosList && btn.dataset.caixa === currentCaixa) return;
       switchCaixa(btn.dataset.caixa);
     });
+  });
+
+  // ============ PROJETOS ============
+  function refreshProjetoHeaderStatus(){
+    if(!isProjeto(currentCaixa)) return;
+    const p = projetosCache.find(pr => pr.id === projetoIdDe(currentCaixa));
+    if(!p) return;
+    const fechado = p.status === 'fechado';
+    const toggleBtn = document.getElementById('btnToggleCerrarProyecto');
+    if(toggleBtn){
+      toggleBtn.dataset.fechado = fechado ? '1' : '0';
+      toggleBtn.textContent = fechado ? '↺ Reabrir proyecto' : '🔒 Cerrar proyecto';
+    }
+    const avisoExistente = projetoDetailHeader.querySelector('.projeto-fechado-aviso');
+    if(fechado && currentRole === 'admin' && !avisoExistente){
+      const aviso = document.createElement('div');
+      aviso.className = 'projeto-fechado-aviso';
+      aviso.textContent = '🔒 Este proyecto está cerrado — reábralo arriba para agregar más movimientos.';
+      projetoDetailHeader.appendChild(aviso);
+    } else if(!fechado && avisoExistente){
+      avisoExistente.remove();
+    }
+    updateAdminFormVisibility();
+  }
+
+  function attachProjetosListener(){
+    if(unsubscribeProjetos) return;
+    unsubscribeProjetos = db.collection('projetos').onSnapshot(
+      (snapshot) => {
+        projetosCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if(viewingProjetosList) renderProjetosList();
+        refreshProjetoHeaderStatus();
+      },
+      () => { /* silencioso */ }
+    );
+  }
+
+  function renderProjetosList(){
+    const ordenados = [...projetosCache].sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+    if(!ordenados.length){
+      projetosListaBody.innerHTML = `<div class="empty-state">Aún no hay proyectos.${currentRole === 'admin' ? ' Cree uno con el botón de arriba.' : ''}</div>`;
+      return;
+    }
+    projetosListaBody.innerHTML = ordenados.map(p => `
+      <div class="projeto-card ${p.status === 'fechado' ? 'fechado' : ''}" data-id="${p.id}">
+        <div class="projeto-card-top">
+          <span class="projeto-card-nome">${escapeHtml(p.nome)}</span>
+          <span class="projeto-card-status ${p.status === 'fechado' ? 'fechado' : 'aberto'}">${p.status === 'fechado' ? 'Cerrado' : 'Abierto'}</span>
+        </div>
+        ${p.descricao ? `<div class="projeto-card-desc">${escapeHtml(p.descricao)}</div>` : ''}
+        <div class="projeto-card-saldo" id="projetoSaldo_${p.id}">Cargando saldo...</div>
+      </div>
+    `).join('');
+    projetosListaBody.querySelectorAll('.projeto-card').forEach(card => {
+      card.addEventListener('click', () => switchCaixa('projeto:' + card.dataset.id));
+    });
+    ordenados.forEach(async (p) => {
+      try{
+        const snap = await db.collection('projetos').doc(p.id).collection('movimentos').get();
+        let totalE = 0, totalS = 0;
+        snap.forEach(doc => {
+          const d = doc.data();
+          if(d.tipo === 'entrada') totalE += (d.valor || 0);
+          else if(d.tipo === 'saida') totalS += (d.valor || 0);
+        });
+        const el = document.getElementById('projetoSaldo_' + p.id);
+        if(el) el.textContent = `Saldo: ${fmtBRL(totalE - totalS)}`;
+      } catch(err){
+        const el = document.getElementById('projetoSaldo_' + p.id);
+        if(el) el.textContent = '';
+      }
+    });
+  }
+
+  btnNuevoProyecto.addEventListener('click', async () => {
+    const nome = prompt('Nombre del proyecto (ej: Cerámica del patio):');
+    if(!nome || !nome.trim()) return;
+    const descricao = prompt('Descripción breve (opcional):') || '';
+    try{
+      await db.collection('projetos').add({ nome: nome.trim(), descricao: descricao.trim(), status: 'aberto', createdAt: Date.now() });
+    } catch(err){ alert('No se pudo crear el proyecto.'); }
   });
 
   function attachColaboradoresListener(){
@@ -914,72 +1129,158 @@
     } catch(err){ return { ok:false, msg:'No se pudo eliminar.' }; }
   }
 
+  async function alternarStatusMembro(id, estaRetirado){
+    try{
+      await db.collection('membros_numerados').doc(id).update({ status: estaRetirado ? null : 'retirado' });
+      return { ok:true };
+    } catch(err){ return { ok:false, msg:'No se pudo actualizar.' }; }
+  }
+
   function buildGerenciarMembrosHtml(){
     const ordenados = [...membrosNumerados].sort((a,b) => parseInt(a.numero,10) - parseInt(b.numero,10));
     const rows = ordenados.length
-      ? ordenados.map(m => `
-          <tr>
+      ? ordenados.map(m => {
+          const retirado = m.status === 'retirado';
+          const nomeExibido = retirado ? `${escapeHtml(m.nome)} <span class="membro-status-tag">retirado</span>` : escapeHtml(m.nome);
+          return `
+          <tr class="${retirado ? 'membro-row-retirado' : ''}">
             <td class="controle-total">${escapeHtml(String(m.numero))}</td>
-            <td>${escapeHtml(m.nome)}</td>
+            <td>${nomeExibido}</td>
             <td class="controle-actions">
               <button class="controle-action-btn membro-edit-btn" data-id="${m.id}" data-numero="${escapeHtml(String(m.numero))}" data-nome="${escapeHtml(m.nome)}" type="button" title="Editar">✎</button>
-              <button class="controle-action-btn controle-del-btn membro-del-btn" data-id="${m.id}" type="button" title="Eliminar">✕</button>
+              <button class="controle-action-btn membro-toggle-btn" data-id="${m.id}" data-retirado="${retirado ? '1' : '0'}" type="button" title="${retirado ? 'Reactivar' : 'Marcar como retirado'}">${retirado ? '↺' : '🚪'}</button>
+              <button class="controle-action-btn controle-del-btn membro-del-btn" data-id="${m.id}" type="button" title="Eliminar por completo">✕</button>
             </td>
-          </tr>`).join('')
+          </tr>`;
+        }).join('')
       : `<tr><td colspan="3" style="text-align:center; font-style:italic; color:var(--ink-soft);">Ningún miembro registrado todavía</td></tr>`;
+    const totalAtivos = membrosNumerados.filter(m => m.status !== 'retirado').length;
     return `
       <div class="report">
         <div class="report-title">Miembros — Caja Mantenimiento</div>
-        <div class="report-subtitle">Cada miembro tiene un número fijo para consultar su propio historial sin ver los demás nombres.</div>
+        <div class="report-subtitle">Cada miembro tiene un número fijo para consultar su propio historial sin ver los demás nombres. Miembros activos: ${totalAtivos}.</div>
         <div class="controle-wrap">
           <table class="controle-table">
             <thead><tr><th>Número</th><th>Nombre</th><th>Acciones</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
+        <div class="controle-note">🚪 marca a alguien como retirado — su número e historial se conservan, pero deja de contar en el total de miembros de las barras de progreso. ↺ lo reactiva. ✕ elimina por completo el registro (no borra sus pagos ya hechos).</div>
       </div>`;
   }
 
-  // ============ LOGIN (sem senha por enquanto) ============
-  async function chooseRole(role){
+  // ============ LOGIN (ADM com senha, MEMBRO livre) ============
+  let pendingRole = null;
+
+  function pedirSenha(role){
+    pendingRole = role;
+    btnRoleAdmin.classList.toggle('selected', role === 'admin');
+    btnRoleMembro.classList.toggle('selected', role === 'membro');
+    loginPasswordArea.style.display = 'block';
+    loginError.textContent = '';
+    loginPassword.value = '';
+    loginPassword.focus();
+  }
+  btnRoleAdmin.addEventListener('click', () => pedirSenha('admin'));
+  loginPassword.addEventListener('keydown', (e) => { if(e.key === 'Enter') doLogin(); });
+  document.getElementById('btnLoginSubmit').addEventListener('click', doLogin);
+
+  async function entrarComoMembro(){
     if(!firebaseConfig || firebaseConfig.apiKey === 'SUA_API_KEY_AQUI'){ loginSetupNote.style.display = 'block'; return; }
     loginError.textContent = '';
     btnRoleAdmin.disabled = true; btnRoleMembro.disabled = true;
     try{
-      if(!auth.currentUser){ await auth.signInAnonymously(); }
-      currentRole = role;
-      localStorage.setItem('caixaManutencaoRole', role);
+      if(!auth.currentUser || auth.currentUser.isAnonymous === false){ await auth.signInAnonymously(); }
+      currentRole = 'membro';
+      canSeeNames = false;
+      localStorage.setItem('caixaManutencaoRole', 'membro');
       loginScreen.style.display = 'none';
       appArea.style.display = 'block';
       applyRoleUI();
       attachSnapshot();
       attachColaboradoresListener();
+      attachProjetosListener();
       attachMembrosNumeradosListener();
     } catch(err){
       loginError.textContent = 'No se pudo ingresar. Verifique que "Authentication > Anónimo" esté activado en Firebase.';
     }
     btnRoleAdmin.disabled = false; btnRoleMembro.disabled = false;
   }
-  btnRoleAdmin.addEventListener('click', () => chooseRole('admin'));
-  btnRoleMembro.addEventListener('click', () => chooseRole('membro'));
+  btnRoleMembro.addEventListener('click', entrarComoMembro);
+
+  async function doLogin(){
+    if(!pendingRole) return;
+    if(!firebaseConfig || firebaseConfig.apiKey === 'SUA_API_KEY_AQUI'){ loginSetupNote.style.display = 'block'; return; }
+    const senha = loginPassword.value;
+    if(!senha){ loginError.textContent = 'Ingrese la contraseña.'; return; }
+    const email = ADMIN_EMAIL;
+    loginError.textContent = '';
+    btnRoleAdmin.disabled = true; btnRoleMembro.disabled = true;
+    try{
+      await auth.signInWithEmailAndPassword(email, senha);
+      currentRole = 'admin';
+      canSeeNames = true;
+      localStorage.setItem('caixaManutencaoRole', 'admin');
+      loginScreen.style.display = 'none';
+      appArea.style.display = 'block';
+      applyRoleUI();
+      attachSnapshot();
+      attachColaboradoresListener();
+      attachProjetosListener();
+      attachMembrosNumeradosListener();
+    } catch(err){
+      loginError.textContent = 'Contraseña incorrecta o cuenta no configurada en Firebase.';
+    }
+    btnRoleAdmin.disabled = false; btnRoleMembro.disabled = false;
+  }
+
   logoutBtn.addEventListener('click', () => {
     localStorage.removeItem('caixaManutencaoRole');
-    currentRole = null;
+    currentRole = null; canSeeNames = false; pendingRole = null;
+    auth.signOut();
     if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     entries = []; privadoCache = {};
     appArea.style.display = 'none';
     loginScreen.style.display = 'flex';
+    loginPasswordArea.style.display = 'none';
   });
+
+  btnDesbloquearNombres.addEventListener('click', async () => {
+    const codigo = prompt('Código para ver los nombres (no habilita edición):');
+    if(!codigo) return;
+    try{
+      await auth.signInWithEmailAndPassword(MEMBER_NAMES_EMAIL, codigo);
+      canSeeNames = true;
+      applyRoleUI();
+      await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id));
+      render();
+    } catch(err){
+      alert('Código incorrecto o cuenta no configurada en Firebase.');
+    }
+  });
+
+  function updateAdminFormVisibility(){
+    const isAdmin = currentRole === 'admin';
+    let mostrar = isAdmin;
+    if(isAdmin && isProjeto(currentCaixa)){
+      const p = projetosCache.find(pr => pr.id === projetoIdDe(currentCaixa));
+      if(p && p.status === 'fechado') mostrar = false;
+    }
+    adminFormBlock.style.display = mostrar ? 'block' : 'none';
+  }
 
   function applyRoleUI(){
     const isAdmin = currentRole === 'admin';
-    roleBadge.textContent = isAdmin ? 'ADM' : 'MEMBRO';
+    const podeVerNombres = isAdmin || canSeeNames;
+    roleBadge.textContent = isAdmin ? 'ADM' : (canSeeNames ? 'MEMBRO 🔓' : 'MEMBRO');
     roleBadge.classList.toggle('admin', isAdmin);
-    adminFormBlock.style.display = isAdmin ? 'block' : 'none';
+    updateAdminFormVisibility();
     topActionsAdmin.style.display = isAdmin ? 'flex' : 'none';
-    btnRelatorioInterno.style.display = isAdmin ? '' : 'none';
+    btnRelatorioInterno.style.display = podeVerNombres ? '' : 'none';
     btnGerenciarMembros.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
+    btnImprimirComprobantes.style.display = isAdmin ? '' : 'none';
     membroLookupBlock.style.display = (!isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
+    btnDesbloquearNombres.style.display = (!isAdmin && !canSeeNames) ? '' : 'none';
     updateControleAnualVisibility();
     if(isAdmin) switchTipo('entrada');
   }
@@ -999,19 +1300,30 @@
     auth = firebase.auth();
     auth.onAuthStateChanged((user) => {
       if(user){
-        const storedRole = localStorage.getItem('caixaManutencaoRole');
-        if(storedRole){
-          currentRole = storedRole;
+        if(user.email === MEMBER_NAMES_EMAIL){
+          currentRole = 'membro'; canSeeNames = true;
+        } else if(user.email === ADMIN_EMAIL){
+          currentRole = 'admin'; canSeeNames = true;
+        } else if(user.email === MEMBER_EMAIL){
+          currentRole = 'membro'; canSeeNames = false;
+        } else if(user.isAnonymous){
+          currentRole = 'membro'; canSeeNames = false;
+        } else {
+          currentRole = null;
+        }
+        if(currentRole){
+          localStorage.setItem('caixaManutencaoRole', currentRole);
           loginScreen.style.display = 'none';
           appArea.style.display = 'block';
           applyRoleUI();
           attachSnapshot();
+          attachProjetosListener();
           attachColaboradoresListener();
           attachMembrosNumeradosListener();
         }
-        // se não há papel salvo, fica na tela de login aguardando o clique em Entrar
+        // se não reconhecemos a conta, fica na tela de login aguardando o clique em Entrar
       } else {
-        currentRole = null;
+        currentRole = null; canSeeNames = false;
         if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
         entries = []; privadoCache = {};
         appArea.style.display = 'none';
@@ -1025,7 +1337,7 @@
     unsubscribeSnapshot = movCollection().orderBy('createdAt', 'desc').onSnapshot(
       async (snapshot) => {
         entries = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if(currentRole === 'admin'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
+        if(currentRole === 'admin' || canSeeNames){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
         render();
       },
       () => { showTransientError('No se pudieron cargar los datos. Verifique las reglas de Firestore.'); }
@@ -1175,7 +1487,7 @@
 
   document.getElementById('resetBtn').addEventListener('click', async () => {
     if(currentRole !== 'admin' || entries.length === 0) return;
-    if(!confirm(`Esto eliminará TODOS los registros de ${CAIXA_LABELS[currentCaixa]} para TODOS los que usan este sitio. ¿Desea continuar?`)) return;
+    if(!confirm(`Esto eliminará TODOS los registros de ${getCaixaLabel(currentCaixa)} para TODOS los que usan este sitio. ¿Desea continuar?`)) return;
     try{
       const batch = db.batch();
       const snapshot = await movCollection().get();
@@ -1267,7 +1579,7 @@
         <div class="r2-header">
           <div class="r2-logo">CAIXA<br>${isAnonimo ? 'FUNDO' : 'PAGO'}</div>
           <div class="r2-orgname">
-            <div class="r2-orgtitle">${CAIXA_LABELS[currentCaixa]}</div>
+            <div class="r2-orgtitle">${getCaixaLabel(currentCaixa)}</div>
             <div class="r2-orgsub">${isAnonimo ? 'Comprobante de Pago' : 'Recibo de Pago'}</div>
           </div>
           <div>
@@ -1287,13 +1599,13 @@
         </div>
 
         ${deRow}
-        <div class="r2-field"><div class="r2-field-label">Referente a</div><div class="r2-field-value">${CAIXA_LABELS[currentCaixa]} Lumisial de Isèrables</div></div>
+        <div class="r2-field"><div class="r2-field-label">Referente a</div><div class="r2-field-value">${getCaixaLabel(currentCaixa)} Lumisial de Isèrables</div></div>
         <div class="r2-field"><div class="r2-field-label">Fecha</div><div class="r2-field-value">${fmtDateISO(entry.data)}</div></div>
 
         <div class="r2-thanks">— recibido con agradecimiento —</div>
 
         <div class="r2-footer">
-          <div class="r2-footer-notes">Documento generado automáticamente por el sistema ${CAIXA_LABELS[currentCaixa]}.</div>
+          <div class="r2-footer-notes">Documento generado automáticamente por el sistema ${getCaixaLabel(currentCaixa)}.</div>
           <div class="r2-stamp-box">
             <div class="r2-stamp">CAIXA<br>PAGO</div>
             <div class="r2-stamp-label">Sello</div>
@@ -1443,10 +1755,40 @@
       : emptyRow(3, 'Ninguna salida en este período');
 
     const subtitle = mode === 'publico' ? 'Informe Mural — sin identificación de quien pagó' : 'Informe Completo — incluye nombres y números de recibo';
+
+    let progressHtml = '';
+    if(currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral'){
+      const numerosQueContribuiram = new Set(entradasList.map(e => e.numeroMembro).filter(Boolean));
+      const totalMembrosAtivos = membrosNumerados.filter(m => m.status !== 'retirado').length;
+      const pctMembros = totalMembrosAtivos > 0 ? Math.min(100, (numerosQueContribuiram.size / totalMembrosAtivos) * 100) : 0;
+
+      let valorBarHtml = '';
+      if(currentCaixa === 'aluguel_geral'){
+        const numMeses = periodo.mesFim - periodo.mesIni + 1;
+        const metaValor = 1500 * numMeses;
+        const pctValor = metaValor > 0 ? Math.min(100, (totalEntradas / metaValor) * 100) : 0;
+        valorBarHtml = `
+          <div class="progress-block">
+            <div class="progress-label"><span>Recaudado en el período</span><b>${fmtBRL(totalEntradas)} / ${fmtBRL(metaValor)}</b></div>
+            <div class="progress-bar-track"><div class="progress-bar-fill valor" style="width:${pctValor}%;"></div></div>
+          </div>`;
+      }
+
+      progressHtml = `
+        <div class="progress-section" style="margin: 4px 0 16px;">
+          <div class="progress-block">
+            <div class="progress-label"><span>Participación de miembros</span><b>${numerosQueContribuiram.size} / ${totalMembrosAtivos}</b></div>
+            <div class="progress-bar-track"><div class="progress-bar-fill" style="width:${pctMembros}%;"></div></div>
+          </div>
+          ${valorBarHtml}
+        </div>`;
+    }
+
     return `
       <div class="report">
-        <div class="report-title">${CAIXA_LABELS[currentCaixa]} — ${periodo.label}</div>
+        <div class="report-title">${getCaixaLabel(currentCaixa)} — ${periodo.label}</div>
         <div class="report-subtitle">${subtitle}</div>
+        ${progressHtml}
         <h4>Ingresos</h4>
         <table><thead>${entradasHead}</thead><tbody>${entradasRows}</tbody></table>
         <h4>Salidas</h4>
@@ -1458,6 +1800,40 @@
         </div>
       </div>`;
   }
+
+  function buildComprobantesHtml(lista, titulo){
+    if(!lista.length){
+      return `<div class="comp-print-header">${escapeHtml(titulo)}</div><div class="comp-empty">No hay comprobantes con foto para imprimir en este período.</div>`;
+    }
+    const itemsHtml = lista.map(e => {
+      const desc = e.descricao || (e.produtos && e.produtos.length ? e.produtos.join(', ') : 'Salida de caja');
+      return `
+        <div class="comp-item">
+          <img src="${e.foto}" alt="Comprobante">
+          <div class="comp-caption">
+            <div>${fmtDateISO(e.data)}</div>
+            <div>${escapeHtml(desc)}</div>
+            <div><b>${fmtBRL(e.valor)}</b></div>
+          </div>
+        </div>`;
+    }).join('');
+    return `<div class="comp-print-header">${escapeHtml(titulo)} — ${lista.length} comprobante(s)</div><div class="comp-print-grid">${itemsHtml}</div>`;
+  }
+
+  function imprimirComprobantes(){
+    let mesFiltro = null;
+    let tituloBase = getCaixaLabel(currentCaixa);
+    if(!isProjeto(currentCaixa)){
+      mesFiltro = monthFilter.value || todayStr().slice(0,7);
+      tituloBase += ` — ${monthLabel(mesFiltro)}`;
+    }
+    const lista = entries
+      .filter(e => e.tipo === 'saida' && e.foto && (!mesFiltro || (e.data || '').slice(0,7) === mesFiltro))
+      .sort((a,b) => a.data < b.data ? -1 : (a.data > b.data ? 1 : 0));
+    printArea.innerHTML = buildComprobantesHtml(lista, tituloBase);
+    window.print();
+  }
+  btnImprimirComprobantes.addEventListener('click', imprimirComprobantes);
 
   async function openReportModal(mode){
     if(mode === 'interno'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
@@ -1764,10 +2140,12 @@
     header.appendChild(titleEl);
     const body = document.createElement('div'); body.className = 'report-modal-body';
     const actions = document.createElement('div'); actions.className = 'report-modal-actions';
+    actions.style.flexWrap = 'wrap';
     actions.innerHTML = `
       <input type="text" id="novoMembroNumero" placeholder="Número" inputmode="numeric" style="flex:0 0 90px; padding:9px; border-radius:6px; border:1.5px solid var(--line); font-family:'IBM Plex Mono', monospace;">
-      <input type="text" id="novoMembroNome" placeholder="Nombre completo" list="nomesColaboradores" style="flex:1; padding:9px; border-radius:6px; border:1.5px solid var(--line);">
+      <input type="text" id="novoMembroNome" placeholder="Nombre completo" list="nomesColaboradores" style="flex:1; min-width:140px; padding:9px; border-radius:6px; border:1.5px solid var(--line);">
       <button type="button" id="btnAgregarMembro">Agregar</button>
+      <button type="button" id="btnMostrarLote" class="secondary" style="flex:1 0 100%;">📋 Agregar varios nombres a la vez</button>
     `;
     modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
     const closeBtn = document.createElement('button');
@@ -1796,6 +2174,14 @@
           if(resultado.ok) refreshBody();
         });
       });
+      body.querySelectorAll('.membro-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const estaRetirado = btn.dataset.retirado === '1';
+          const resultado = await alternarStatusMembro(btn.dataset.id, estaRetirado);
+          if(resultado.ok){ refreshBody(); updateProgressBars(); }
+          else{ alert(resultado.msg); }
+        });
+      });
     }
     refreshBody();
 
@@ -1806,6 +2192,39 @@
       if(!resultado.ok){ alert(resultado.msg); return; }
       numeroInput.value = ''; nomeInput.value = '';
       refreshBody();
+    });
+
+    actions.querySelector('#btnMostrarLote').addEventListener('click', () => {
+      if(body.querySelector('#loteArea')){ return; }
+      const loteBox = document.createElement('div');
+      loteBox.id = 'loteArea';
+      loteBox.style.cssText = 'margin-top:14px; padding:14px; border:1.5px dashed var(--line); border-radius:6px;';
+      loteBox.innerHTML = `
+        <label style="font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); font-weight:600; display:block; margin-bottom:6px;">
+          Un nombre por línea (se numeran automáticamente empezando por el próximo número libre)
+        </label>
+        <textarea id="loteTextarea" rows="6" style="width:100%; padding:9px; border-radius:6px; border:1.5px solid var(--line); font-family:'Inter', sans-serif; font-size:13px;" placeholder="María Silva&#10;João Santos&#10;Ana Pereira"></textarea>
+        <div class="form-error" id="loteError"></div>
+        <button type="button" id="btnConfirmarLote" style="margin-top:8px; padding:9px 18px; border-radius:999px; border:none; background:var(--ledger-green); color:var(--paper); font-weight:600; cursor:pointer;">Agregar todos</button>
+      `;
+      body.insertBefore(loteBox, body.firstChild);
+      loteBox.querySelector('#btnConfirmarLote').addEventListener('click', async () => {
+        const linhas = loteBox.querySelector('#loteTextarea').value.split('\n').map(s => s.trim()).filter(Boolean);
+        if(!linhas.length) return;
+        const loteErrorEl = loteBox.querySelector('#loteError');
+        loteErrorEl.textContent = '';
+        let proximoNumero = membrosNumerados.length
+          ? Math.max(...membrosNumerados.map(m => parseInt(m.numero,10) || 0)) + 1
+          : 1;
+        const falhas = [];
+        for(const nomeLinha of linhas){
+          const resultado = await salvarMembroNumerado(proximoNumero, nomeLinha);
+          if(!resultado.ok){ falhas.push(`${nomeLinha}: ${resultado.msg}`); }
+          else { proximoNumero++; }
+        }
+        if(falhas.length){ loteErrorEl.textContent = 'Algunos no se pudieron agregar: ' + falhas.join(' · '); }
+        refreshBody();
+      });
     });
   }
   btnGerenciarMembros.addEventListener('click', openGerenciarMembrosModal);
@@ -1818,7 +2237,7 @@
     const anos = [...new Set(minhas.map(e => (e.data || '').slice(0,4)))].filter(Boolean).sort().reverse();
     let html = `<div class="report">
       <div class="report-title">Mi Historial — Miembro Nº ${escapeHtml(numero)}</div>
-      <div class="report-subtitle">${CAIXA_LABELS[currentCaixa]} · contribución de referencia</div>`;
+      <div class="report-subtitle">${getCaixaLabel(currentCaixa)} · contribución de referencia</div>`;
     anos.forEach(ano => {
       const valores = new Array(12).fill(0);
       minhas.filter(e => (e.data || '').slice(0,4) === ano).forEach(e => {
@@ -1867,7 +2286,7 @@
     const monthFiltered = monthValue ? sorted.filter(e => (e.data||'').slice(0,7) === monthValue) : sorted;
     const filtered = searchTerm
       ? monthFiltered.filter(e => {
-          if(e.tipo === 'entrada'){ const nome = (privadoCache[e.id]||{}).nome || ''; return currentRole === 'admin' ? nome.toLowerCase().includes(searchTerm) : false; }
+          if(e.tipo === 'entrada'){ const nome = (privadoCache[e.id]||{}).nome || ''; return (currentRole === 'admin' || canSeeNames) ? nome.toLowerCase().includes(searchTerm) : false; }
           const hay = [(e.descricao||''), ...(e.produtos||[])].join(' ').toLowerCase();
           return hay.includes(searchTerm);
         })
@@ -1889,9 +2308,10 @@
         let titulo, descLine, produtosHtml = '';
         if(e.tipo === 'entrada'){
           const isAdmin = currentRole === 'admin';
+          const podeVerNombres = isAdmin || canSeeNames;
           const p = privadoCache[e.id] || {};
-          titulo = isAdmin ? (p.nome || '...') : 'Ingreso';
-          descLine = (isAdmin && p.receiptNumber ? p.receiptNumber + ' · ' : '') + 'Ingreso de dinero';
+          titulo = podeVerNombres ? (p.nome || '...') : 'Ingreso';
+          descLine = (podeVerNombres && p.receiptNumber ? p.receiptNumber + ' · ' : '') + 'Ingreso de dinero';
         } else {
           titulo = e.descricao || (e.produtos && e.produtos[0]) || 'Salida de la caja';
           descLine = 'Salida de la caja';
