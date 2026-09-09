@@ -532,8 +532,8 @@
 </div>
 
 <div class="caixa-tabs" id="caixaTabsRow">
-  <button class="caixa-tab active" data-group="manutencao" type="button">🔧 Mantenimiento</button>
-  <button class="caixa-tab" data-group="aluguel" type="button">🏠 Alquiler</button>
+  <button class="caixa-tab active" data-group="aluguel" type="button">🏠 Alquiler</button>
+  <button class="caixa-tab" data-group="manutencao" type="button">🔧 Mantenimiento</button>
   <button class="caixa-tab" data-group="projetos" id="tabGroupProjetos" type="button">📁 Proyectos</button>
 </div>
 
@@ -733,7 +733,7 @@
     aluguel_imposto: 'aluguel',
     aluguel_emergencia: 'aluguel'
   };
-  let currentCaixa = 'manutencao';
+  let currentCaixa = 'aluguel_geral';
   let projetosCache = []; // [{id, nome, descricao, status, createdAt}]
   let unsubscribeProjetos = null;
   let viewingProjetosList = false;
@@ -1298,7 +1298,7 @@
       loginScreen.style.display = 'none';
       appArea.style.display = 'block';
       applyRoleUI();
-      attachSnapshot();
+      switchCaixa(currentCaixa);
       attachColaboradoresListener();
       attachProjetosListener();
       attachMembrosNumeradosListener();
@@ -1325,7 +1325,7 @@
       loginScreen.style.display = 'none';
       appArea.style.display = 'block';
       applyRoleUI();
-      attachSnapshot();
+      switchCaixa(currentCaixa);
       attachColaboradoresListener();
       attachProjetosListener();
       attachMembrosNumeradosListener();
@@ -1418,7 +1418,7 @@
           loginScreen.style.display = 'none';
           appArea.style.display = 'block';
           applyRoleUI();
-          attachSnapshot();
+          switchCaixa(currentCaixa);
           attachProjetosListener();
           attachColaboradoresListener();
           attachMembrosNumeradosListener();
