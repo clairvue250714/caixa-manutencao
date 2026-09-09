@@ -227,6 +227,16 @@
   .caixa-subtab{ flex:0 0 auto; white-space:nowrap; padding: 8px 12px; border-radius: 999px;
     border: 1.5px solid var(--kraft-dark); background: var(--paper); color: var(--ink-soft);
     font-family:'Inter', sans-serif; font-weight:600; font-size: 12px; cursor:pointer; transition: all .15s ease; }
+  .reservas-resumo{ display:flex; flex-direction:column; gap:8px; margin-bottom: 18px; }
+  .reservas-resumo-title{ font-family:'Fraunces', serif; font-size: 13px; text-transform:uppercase; letter-spacing:.05em; color: var(--ledger-green-dark); margin-bottom: 2px; }
+  .reserva-card{ background: var(--paper); border: 1px solid var(--kraft-dark); border-left: 4px solid var(--gold);
+    border-radius: var(--radius); padding: 10px 14px; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+    transition: box-shadow .15s ease; }
+  .reserva-card:hover{ box-shadow: 0 2px 8px rgba(27,67,50,0.12); }
+  .reserva-card-nome{ font-weight:600; font-size: 13.5px; }
+  .reserva-card-meta{ font-size: 10.5px; color: var(--ink-soft); margin-top:1px; }
+  .reserva-card-saldo{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size: 14px; color: var(--ledger-green-dark); }
+
   .caixa-subtab.active{ background: var(--ledger-green); border-color: var(--ledger-green); color: var(--paper); }
 
   .projetos-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px; flex-wrap:wrap; }
@@ -458,6 +468,8 @@
   .comp-empty{ padding:40px; text-align:center; font-family:'Inter', sans-serif; color: var(--ink-soft); }
   @media print{
     .comp-item:nth-child(4n){ break-after: page; }
+    .print-area .receipt{ break-after: page; margin-bottom: 0; }
+    .print-area .receipt:last-child{ break-after: auto; }
   }
 
   @media print{
@@ -524,13 +536,6 @@
   <button class="caixa-tab" data-group="projetos" id="tabGroupProjetos" type="button">📁 Proyectos</button>
 </div>
 
-<div class="caixa-subtabs" id="aluguelSubTabs" style="display:none;">
-  <button class="caixa-subtab active" data-caixa="aluguel_geral" type="button">💰 General</button>
-  <button class="caixa-subtab" data-caixa="aluguel_luz" type="button">💡 Electricidad · 60 Fr/mes</button>
-  <button class="caixa-subtab" data-caixa="aluguel_imposto" type="button">🧾 Impuesto Fin de Año · 40 Fr/mes</button>
-  <button class="caixa-subtab" data-caixa="aluguel_emergencia" type="button">🚨 Emergencia · 100 Fr/mes</button>
-</div>
-
 <div class="wrap">
 
   <div id="projetosListArea" style="display:none;">
@@ -547,6 +552,10 @@
   <div id="projetoDetailHeader" style="display:none;"></div>
 
   <div class="meta-banner" id="metaBanner" style="display:none;"></div>
+
+  <div id="subfundoDetailHeader" style="display:none;"></div>
+
+  <div id="reservasResumo" style="display:none;"></div>
 
   <div class="progress-section" id="progressSection" style="display:none;">
     <div class="progress-block">
@@ -573,6 +582,7 @@
     <button class="report-btn" id="btnControleAnual" type="button" style="display:none;">📅 Control Anual de Contribuyentes</button>
     <button class="report-btn" id="btnGerenciarMembros" type="button" style="display:none;">👥 Gestionar Miembros</button>
     <button class="report-btn" id="btnImprimirComprobantes" type="button" style="display:none;">🧾 Imprimir Comprobantes</button>
+    <button class="report-btn" id="btnRecibosMembro" type="button" style="display:none;">📑 Recibos de un miembro</button>
   </div>
 
   <div class="membro-lookup" id="membroLookupBlock" style="display:none;">
@@ -624,6 +634,17 @@
       <div class="field" id="fieldProdutosWrap" style="margin-bottom:12px; display:none;">
         <label for="fProdutos">Productos comprados</label>
         <textarea id="fProdutos" placeholder="Un producto por línea, o separados por coma&#10;Ej: Detergente&#10;Papel toalla&#10;Café"></textarea>
+      </div>
+
+      <div class="field" id="fieldDestinoWrap" style="margin-bottom:12px; display:none;">
+        <label for="fDestino">Destinar a (reserva) <span style="font-weight:400; text-transform:none; letter-spacing:normal;">— opcional</span></label>
+        <select id="fDestino" style="font-family:'Inter', sans-serif; font-size:15px; padding:9px 10px; border:1.5px solid var(--line); border-radius:6px; background:var(--paper); width:100%;">
+          <option value="">— Gasto normal (sin repase) —</option>
+          <option value="aluguel_luz">💡 Electricidad</option>
+          <option value="aluguel_imposto">🧾 Impuesto Fin de Año</option>
+          <option value="aluguel_emergencia">🚨 Emergencia</option>
+        </select>
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-top:4px;">Si elige una reserva, este mismo valor se registra automáticamente como ingreso allá — no hace falta repetirlo.</div>
       </div>
 
       <div class="photo-drop-area" id="photoDropArea" style="display:none;">
@@ -748,7 +769,8 @@
   const progressValorText = document.getElementById('progressValorText');
   const progressValorBlock = document.getElementById('progressValorBlock');
   const progressValorFill = document.getElementById('progressValorFill');
-  const aluguelSubTabs = document.getElementById('aluguelSubTabs');
+  const subfundoDetailHeader = document.getElementById('subfundoDetailHeader');
+  const reservasResumo = document.getElementById('reservasResumo');
   const tabGroupProjetos = document.getElementById('tabGroupProjetos');
   const projetosListArea = document.getElementById('projetosListArea');
   const caixaContentArea = document.getElementById('caixaContentArea');
@@ -775,6 +797,8 @@
   const slipTitle = document.getElementById('slipTitle');
   const fieldDescWrap = document.getElementById('fieldDescWrap');
   const fieldProdutosWrap = document.getElementById('fieldProdutosWrap');
+  const fieldDestinoWrap = document.getElementById('fieldDestinoWrap');
+  const fDestino = document.getElementById('fDestino');
   const tabEntrada = document.getElementById('tabEntrada');
   const tabSaida = document.getElementById('tabSaida');
   const printArea = document.getElementById('printArea');
@@ -785,6 +809,7 @@
   const btnControleAnual = document.getElementById('btnControleAnual');
   const btnGerenciarMembros = document.getElementById('btnGerenciarMembros');
   const btnImprimirComprobantes = document.getElementById('btnImprimirComprobantes');
+  const btnRecibosMembro = document.getElementById('btnRecibosMembro');
   const membroLookupBlock = document.getElementById('membroLookupBlock');
   const membroNumeroInput = document.getElementById('membroNumeroInput');
   const membroLookupResult = document.getElementById('membroLookupResult');
@@ -895,13 +920,13 @@
     return CAIXA_GROUP[caixa];
   }
 
+  const RESERVAS_ALUGUEL = ['aluguel_luz', 'aluguel_imposto', 'aluguel_emergencia'];
+
   function switchCaixa(caixa){
     currentCaixa = caixa;
     viewingProjetosList = false;
     const grupo = grupoDeCaixa(caixa);
     document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === grupo));
-    document.querySelectorAll('.caixa-subtab').forEach(btn => btn.classList.toggle('active', btn.dataset.caixa === caixa));
-    aluguelSubTabs.style.display = grupo === 'aluguel' ? 'flex' : 'none';
     projetosListArea.style.display = 'none';
     caixaContentArea.style.display = 'block';
     summaryBar.style.display = 'block';
@@ -928,12 +953,31 @@
       projetoDetailHeader.style.display = 'none';
       projetoDetailHeader.innerHTML = '';
     }
+
+    if(RESERVAS_ALUGUEL.includes(caixa)){
+      subfundoDetailHeader.style.display = 'block';
+      subfundoDetailHeader.innerHTML = `<button class="projeto-back-link" id="btnVolverAlquilerGeral" type="button">← Volver a Alquiler General</button>`;
+      subfundoDetailHeader.querySelector('#btnVolverAlquilerGeral').addEventListener('click', () => switchCaixa('aluguel_geral'));
+      reservasResumo.style.display = 'none';
+    } else {
+      subfundoDetailHeader.style.display = 'none';
+      subfundoDetailHeader.innerHTML = '';
+    }
+
+    if(caixa === 'aluguel_geral'){
+      reservasResumo.style.display = 'block';
+      updateReservasResumo();
+    } else if(!RESERVAS_ALUGUEL.includes(caixa)){
+      reservasResumo.style.display = 'none';
+    }
+
     updateAdminFormVisibility();
     // topbarTitle fica fixo como "ADM Isèrables" — não muda por caixa
     updateMetaBanner();
     updateControleAnualVisibility();
     btnGerenciarMembros.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     btnImprimirComprobantes.style.display = (currentRole === 'admin') ? '' : 'none';
+    btnRecibosMembro.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     membroLookupBlock.style.display = (currentRole === 'membro' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     entries = []; privadoCache = {};
     searchTerm = ''; document.getElementById('searchInput').value = '';
@@ -941,12 +985,47 @@
     if(currentRole){ attachSnapshot(); if(currentRole === 'admin') switchTipo('entrada'); }
   }
 
+  async function updateReservasResumo(){
+    if(currentCaixa !== 'aluguel_geral') return;
+    const labels = { aluguel_luz: '💡 Electricidad', aluguel_imposto: '🧾 Impuesto Fin de Año', aluguel_emergencia: '🚨 Emergencia' };
+    const metas = { aluguel_luz: 60, aluguel_imposto: 40, aluguel_emergencia: 100 };
+    reservasResumo.innerHTML = `<div class="reservas-resumo-title">Reservas de esta caja</div>` +
+      RESERVAS_ALUGUEL.map(k => `
+        <div class="reserva-card" data-caixa="${k}">
+          <div>
+            <div class="reserva-card-nome">${labels[k]}</div>
+            <div class="reserva-card-meta">Meta mensual: ${metas[k]} Fr</div>
+          </div>
+          <div class="reserva-card-saldo" id="reservaSaldo_${k}">Cargando...</div>
+        </div>
+      `).join('');
+    reservasResumo.querySelectorAll('.reserva-card').forEach(card => {
+      card.addEventListener('click', () => switchCaixa(card.dataset.caixa));
+    });
+    RESERVAS_ALUGUEL.forEach(async (k) => {
+      try{
+        const snap = await db.collection(CAIXA_COLLECTIONS[k]).get();
+        let totalE = 0, totalS = 0;
+        snap.forEach(doc => {
+          const d = doc.data();
+          if(d.tipo === 'entrada') totalE += (d.valor || 0);
+          else if(d.tipo === 'saida') totalS += (d.valor || 0);
+        });
+        const el = document.getElementById('reservaSaldo_' + k);
+        if(el) el.textContent = fmtBRL(totalE - totalS);
+      } catch(err){
+        const el = document.getElementById('reservaSaldo_' + k);
+        if(el) el.textContent = '—';
+      }
+    });
+  }
+
   function showProjetosList(){
     viewingProjetosList = true;
     if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === 'projetos'));
-    document.querySelectorAll('.caixa-subtab').forEach(btn => btn.classList.remove('active'));
-    aluguelSubTabs.style.display = 'none';
+    subfundoDetailHeader.style.display = 'none';
+    reservasResumo.style.display = 'none';
     caixaContentArea.style.display = 'none';
     summaryBar.style.display = 'none';
     projetosListArea.style.display = 'block';
@@ -960,12 +1039,6 @@
       if(grupo === 'projetos'){ showProjetosList(); return; }
       if(!viewingProjetosList && grupo === grupoDeCaixa(currentCaixa)) return;
       switchCaixa(grupo === 'aluguel' ? 'aluguel_geral' : 'manutencao');
-    });
-  });
-  document.querySelectorAll('.caixa-subtab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if(!viewingProjetosList && btn.dataset.caixa === currentCaixa) return;
-      switchCaixa(btn.dataset.caixa);
     });
   });
 
@@ -1306,6 +1379,7 @@
     btnRelatorioInterno.style.display = podeVerNombres ? '' : 'none';
     btnGerenciarMembros.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     btnImprimirComprobantes.style.display = isAdmin ? '' : 'none';
+    btnRecibosMembro.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     membroLookupBlock.style.display = (!isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     btnDesbloquearNombres.style.display = (!isAdmin && !canSeeNames) ? '' : 'none';
     updateControleAnualVisibility();
@@ -1392,7 +1466,7 @@
     currentTipo = tipo;
     resetPhotoField();
     formError.textContent = '';
-    fNome.value = ''; fDesc.value = ''; fValor.value = ''; fProdutos.value = '';
+    fNome.value = ''; fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fDestino.value = '';
     fData.value = todayStr();
     tabEntrada.classList.toggle('active', tipo === 'entrada');
     tabSaida.classList.toggle('active', tipo === 'saida');
@@ -1402,12 +1476,14 @@
       slipTitle.textContent = 'Registrar ingreso';
       fieldDescWrap.style.display = 'none';
       fieldProdutosWrap.style.display = 'none';
+      fieldDestinoWrap.style.display = 'none';
       photoDropArea.style.display = 'none';
       addBtn.textContent = 'Registrar ingreso';
     } else {
       slipTitle.textContent = 'Registrar salida (gasto)';
       fieldDescWrap.style.display = '';
       fieldProdutosWrap.style.display = '';
+      fieldDestinoWrap.style.display = (currentCaixa === 'aluguel_geral') ? '' : 'none';
       photoDropArea.style.display = 'block';
       addBtn.textContent = 'Registrar salida';
     }
@@ -1494,8 +1570,15 @@
         const produtos = parseProdutosInput(fProdutos.value);
         const desc = fDesc.value.trim();
         if(!desc && produtos.length === 0){ formError.textContent = 'Ingrese la descripción o los productos comprados.'; addBtn.disabled = false; return; }
+        const destino = (currentCaixa === 'aluguel_geral') ? fDestino.value : '';
         await movCollection().add({ tipo: 'saida', descricao: desc, produtos, valor, data, foto: pendingPhoto || null, createdAt: Date.now() });
-        fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fData.value = todayStr();
+        if(destino){
+          const labels = { aluguel_luz: 'Electricidad', aluguel_imposto: 'Impuesto Fin de Año', aluguel_emergencia: 'Emergencia' };
+          const docRefReserva = await db.collection(CAIXA_COLLECTIONS[destino]).add({ tipo: 'entrada', valor, data, numeroMembro: null, createdAt: Date.now() });
+          await docRefReserva.collection('privado').doc('dados').set({ nome: `Repase desde Alquiler General${desc ? ' — ' + desc : ''}`, receiptNumber: null });
+          updateReservasResumo();
+        }
+        fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fData.value = todayStr(); fDestino.value = '';
         resetPhotoField();
       }
     } catch(err){ showTransientError('No se pudo guardar. Verifique su conexión y las reglas de Firestore.'); }
@@ -1861,6 +1944,64 @@
     window.print();
   }
   btnImprimirComprobantes.addEventListener('click', imprimirComprobantes);
+
+  function buscarEntradasDoMembro(consulta){
+    const alvo = consulta.trim().toLowerCase();
+    const porNumero = /^\d+$/.test(consulta.trim());
+    return entries
+      .filter(e => e.tipo === 'entrada')
+      .filter(e => {
+        if(porNumero) return String(e.numeroMembro || '') === consulta.trim();
+        const p = privadoCache[e.id] || {};
+        return (p.nome || '').toLowerCase().includes(alvo);
+      })
+      .sort((a,b) => a.data < b.data ? -1 : (a.data > b.data ? 1 : 0));
+  }
+
+  function abrirRecibosMembro(){
+    const consulta = prompt('Nombre o número del miembro:');
+    if(!consulta || !consulta.trim()) return;
+    const lista = buscarEntradasDoMembro(consulta);
+    if(!lista.length){ alert('No se encontraron recibos para "' + consulta + '".'); return; }
+
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'report-modal';
+    const header = document.createElement('div'); header.className = 'report-modal-header';
+    const titleEl = document.createElement('div'); titleEl.className = 'report-modal-header-title';
+    const primeiroNome = (privadoCache[lista[0].id] || {}).nome || consulta;
+    titleEl.textContent = `Recibos de ${primeiroNome} (${lista.length})`;
+    header.appendChild(titleEl);
+    const body = document.createElement('div'); body.className = 'report-modal-body';
+    body.innerHTML = `<div id="recibosMembroWrap" style="display:flex; flex-direction:column; gap:16px;">` +
+      lista.map(e => {
+        const p = privadoCache[e.id] || {};
+        return receiptInnerHtml({ ...e, nome: p.nome, receiptNumber: p.receiptNumber });
+      }).join('') +
+      `</div>`;
+    const actions = document.createElement('div'); actions.className = 'report-modal-actions';
+    actions.innerHTML = `<button type="button" id="btnBaixarRecibosMembro">⬇ Descargar todo</button><button type="button" id="btnImprimirRecibosMembro" class="secondary">🖨 Imprimir todo</button>`;
+    modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
+    const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => backdrop.remove());
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    backdrop.appendChild(modal); backdrop.appendChild(closeBtn);
+    document.body.appendChild(backdrop);
+
+    modal.querySelector('#btnBaixarRecibosMembro').addEventListener('click', async () => {
+      const wrap = body.querySelector('#recibosMembroWrap');
+      try{
+        const canvas = await html2canvas(wrap, { backgroundColor: '#FBF7EC', scale: 2 });
+        const link = document.createElement('a');
+        link.download = `recibos-${primeiroNome.replace(/\s+/g,'_')}.png`;
+        link.href = canvas.toDataURL('image/png'); link.click();
+      } catch(err){ alert('No se pudo generar la imagen. Use la opción Imprimir.'); }
+    });
+    modal.querySelector('#btnImprimirRecibosMembro').addEventListener('click', () => {
+      printArea.innerHTML = body.querySelector('#recibosMembroWrap').innerHTML;
+      window.print();
+    });
+  }
+  btnRecibosMembro.addEventListener('click', abrirRecibosMembro);
 
   async function openReportModal(mode){
     if(mode === 'interno'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
