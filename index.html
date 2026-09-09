@@ -1960,11 +1960,44 @@
   }
 
   function abrirRecibosMembro(){
-    const consulta = prompt('Nombre o número del miembro:');
-    if(!consulta || !consulta.trim()) return;
-    const lista = buscarEntradasDoMembro(consulta);
-    if(!lista.length){ alert('No se encontraron recibos para "' + consulta + '".'); return; }
+    const backdropBusca = document.createElement('div'); backdropBusca.className = 'modal-backdrop';
+    const modalBusca = document.createElement('div'); modalBusca.className = 'edit-modal';
+    modalBusca.innerHTML = `
+      <h3>Recibos de un miembro</h3>
+      <div class="field">
+        <label>Nombre o número</label>
+        <input type="text" id="buscaMembroInput" placeholder="Empiece a escribir..." list="nomesColaboradores" autocomplete="off">
+      </div>
+      <div class="form-error" id="buscaMembroError"></div>
+      <div class="edit-modal-actions">
+        <button type="button" class="btn-cancelar" id="btnCancelarBuscaMembro">Cancelar</button>
+        <button type="button" class="btn-salvar" id="btnBuscarMembro">Buscar</button>
+      </div>
+    `;
+    backdropBusca.appendChild(modalBusca);
+    backdropBusca.addEventListener('click', (e) => { if(e.target === backdropBusca) backdropBusca.remove(); });
+    document.body.appendChild(backdropBusca);
+    const inputBusca = modalBusca.querySelector('#buscaMembroInput');
+    inputBusca.focus();
 
+    function executarBusca(){
+      const consulta = inputBusca.value.trim();
+      const errorEl = modalBusca.querySelector('#buscaMembroError');
+      if(!consulta){ errorEl.textContent = 'Escriba un nombre o número.'; return; }
+      const lista = buscarEntradasDoMembro(consulta);
+      if(!lista.length){
+        errorEl.textContent = `No se encontraron recibos para "${consulta}" en ${getCaixaLabel(currentCaixa)}. Verifique el nombre o pruebe en la otra caja (Mantenimiento/Alquiler).`;
+        return;
+      }
+      backdropBusca.remove();
+      mostrarRecibosDoMembro(lista, consulta);
+    }
+    modalBusca.querySelector('#btnBuscarMembro').addEventListener('click', executarBusca);
+    inputBusca.addEventListener('keydown', (e) => { if(e.key === 'Enter') executarBusca(); });
+    modalBusca.querySelector('#btnCancelarBuscaMembro').addEventListener('click', () => backdropBusca.remove());
+  }
+
+  function mostrarRecibosDoMembro(lista, consulta){
     const listaComDados = lista.map(e => {
       const p = privadoCache[e.id] || {};
       return { ...e, nome: p.nome, receiptNumber: p.receiptNumber };
