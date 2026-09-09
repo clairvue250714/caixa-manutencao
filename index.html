@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <!-- ============================================================
      FIREBASE — banco de dados compartilhado
@@ -1964,22 +1965,24 @@
     const lista = buscarEntradasDoMembro(consulta);
     if(!lista.length){ alert('No se encontraron recibos para "' + consulta + '".'); return; }
 
+    const listaComDados = lista.map(e => {
+      const p = privadoCache[e.id] || {};
+      return { ...e, nome: p.nome, receiptNumber: p.receiptNumber };
+    });
+
     const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
     const modal = document.createElement('div'); modal.className = 'report-modal';
     const header = document.createElement('div'); header.className = 'report-modal-header';
     const titleEl = document.createElement('div'); titleEl.className = 'report-modal-header-title';
-    const primeiroNome = (privadoCache[lista[0].id] || {}).nome || consulta;
-    titleEl.textContent = `Recibos de ${primeiroNome} (${lista.length})`;
+    const primeiroNome = listaComDados[0].nome || consulta;
+    titleEl.textContent = `Recibos de ${primeiroNome} (${listaComDados.length})`;
     header.appendChild(titleEl);
     const body = document.createElement('div'); body.className = 'report-modal-body';
     body.innerHTML = `<div id="recibosMembroWrap" style="display:flex; flex-direction:column; gap:16px;">` +
-      lista.map(e => {
-        const p = privadoCache[e.id] || {};
-        return receiptInnerHtml({ ...e, nome: p.nome, receiptNumber: p.receiptNumber });
-      }).join('') +
+      listaComDados.map(receiptInnerHtml).join('') +
       `</div>`;
     const actions = document.createElement('div'); actions.className = 'report-modal-actions';
-    actions.innerHTML = `<button type="button" id="btnBaixarRecibosMembro">⬇ Descargar todo</button><button type="button" id="btnImprimirRecibosMembro" class="secondary">🖨 Imprimir todo</button>`;
+    actions.innerHTML = `<button type="button" id="btnBaixarRecibosMembro">⬇ Descargar todo (.zip)</button><button type="button" id="btnImprimirRecibosMembro" class="secondary">🖨 Imprimir todo</button>`;
     modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
     const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
     closeBtn.addEventListener('click', () => backdrop.remove());
@@ -1987,14 +1990,34 @@
     backdrop.appendChild(modal); backdrop.appendChild(closeBtn);
     document.body.appendChild(backdrop);
 
-    modal.querySelector('#btnBaixarRecibosMembro').addEventListener('click', async () => {
-      const wrap = body.querySelector('#recibosMembroWrap');
+    modal.querySelector('#btnBaixarRecibosMembro').addEventListener('click', async (ev) => {
+      const btn = ev.currentTarget;
+      const originalLabel = btn.textContent;
+      btn.textContent = 'Generando .zip...'; btn.disabled = true;
       try{
-        const canvas = await html2canvas(wrap, { backgroundColor: '#FBF7EC', scale: 2 });
+        const zip = new JSZip();
+        const cards = body.querySelectorAll('#recibosMembroWrap .receipt');
+        const nomesUsados = {};
+        for(let i = 0; i < cards.length; i++){
+          const canvas = await html2canvas(cards[i], { backgroundColor: '#FBF7EC', scale: 2 });
+          const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          let nomeArquivo = nomeArquivoRecibo(listaComDados[i]);
+          if(nomesUsados[nomeArquivo]){
+            nomesUsados[nomeArquivo]++;
+            nomeArquivo = nomeArquivo.replace('.png', `-${nomesUsados[nomeArquivo]}.png`);
+          } else {
+            nomesUsados[nomeArquivo] = 1;
+          }
+          zip.file(nomeArquivo, blob);
+        }
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
         const link = document.createElement('a');
-        link.download = `recibos-${primeiroNome.replace(/\s+/g,'_')}.png`;
-        link.href = canvas.toDataURL('image/png'); link.click();
-      } catch(err){ alert('No se pudo generar la imagen. Use la opción Imprimir.'); }
+        link.download = `recibos-${primeiroNome.replace(/\s+/g,'_')}.zip`;
+        link.href = URL.createObjectURL(zipBlob);
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 4000);
+      } catch(err){ alert('No se pudo generar el .zip. Use la opción Imprimir.'); }
+      btn.textContent = originalLabel; btn.disabled = false;
     });
     modal.querySelector('#btnImprimirRecibosMembro').addEventListener('click', () => {
       printArea.innerHTML = body.querySelector('#recibosMembroWrap').innerHTML;
