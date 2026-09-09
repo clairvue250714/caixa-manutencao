@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ADM Isèrables</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%231B4332'/%3E%3Ccircle cx='50' cy='50' r='34' fill='none' stroke='%23EFE6D0' stroke-width='5'/%3E%3Ctext x='50' y='45' font-family='Georgia,serif' font-size='17' font-weight='700' fill='%23EFE6D0' text-anchor='middle'%3EADM%3C/text%3E%3Ctext x='50' y='63' font-family='Georgia,serif' font-size='13' fill='%23EFE6D0' text-anchor='middle'%3EISE%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -69,7 +72,8 @@
               allow write: if souAdmin();
             }
             match /membros_numerados/{id} {
-              allow read, write: if souAdmin();
+              allow read: if request.auth != null;
+              allow write: if souAdmin();
             }
             match /projetos/{id} {
               allow read: if request.auth != null;
@@ -564,7 +568,7 @@
       <div class="progress-bar-track"><div class="progress-bar-fill" id="progressMembrosFill" style="width:0%;"></div></div>
     </div>
     <div class="progress-block" id="progressValorBlock">
-      <div class="progress-label"><span>Recaudado este mes</span><b id="progressValorText">R$ 0,00 / R$ 0,00</b></div>
+      <div class="progress-label"><span>Recaudado este mes</span><b id="progressValorText">Fr. 0.00 / Fr. 0.00</b></div>
       <div class="progress-bar-track"><div class="progress-bar-fill valor" id="progressValorFill" style="width:0%;"></div></div>
     </div>
   </div>
@@ -574,7 +578,7 @@
       <div class="saldo-label">Saldo en caja</div>
       <div class="saldo-sub" id="saldoSub">0 entradas · 0 saídas</div>
     </div>
-    <div class="saldo-value" id="saldoValue">R$ 0,00</div>
+    <div class="saldo-value" id="saldoValue">Fr. 0.00</div>
   </div>
 
   <div class="report-actions-row">
@@ -588,9 +592,11 @@
 
   <div class="membro-lookup" id="membroLookupBlock" style="display:none;">
     <h3>🔢 Ver mi historial</h3>
-    <p>Ingrese su número de miembro para ver sus contribuciones mensuales en la Caja Mantenimiento.</p>
+    <p>Ingrese su número o nombre de miembro (empiece a escribir para ver sugerencias) para ver sus contribuciones mensuales.
+      <button type="button" id="btnVerListaMiembros" class="projeto-back-link" style="display:inline; margin:0; padding:0; border:none; background:none;">📋 Ver lista de miembros y números</button>
+    </p>
     <div class="membro-lookup-row">
-      <input type="text" id="membroNumeroInput" placeholder="Ej: 7" inputmode="numeric">
+      <input type="text" id="membroNumeroInput" placeholder="Ej: 7 o María Silva" list="nomesMiembrosOficiais" autocomplete="off">
       <button type="button" id="btnVerMeuHistorico">Ver</button>
     </div>
     <div id="membroLookupResult"></div>
@@ -614,9 +620,10 @@
           <label for="fNome">Nombre de quien pagó</label>
           <input type="text" id="fNome" placeholder="Ej: María Silva" list="nomesColaboradores" autocomplete="off">
           <datalist id="nomesColaboradores"></datalist>
+          <datalist id="nomesMiembrosOficiais"></datalist>
         </div>
         <div class="field valor">
-          <label for="fValor">Importe (R$)</label>
+          <label for="fValor">Importe (Fr.)</label>
           <input type="text" id="fValor" placeholder="Ej: 150,00" inputmode="decimal">
         </div>
       </div>
@@ -684,12 +691,12 @@
 <div class="summary" id="summaryBar">
   <div class="summary-inner">
     <div class="summary-mini">
-      <span>Ingresos <b id="miniEntradas">R$ 0,00</b></span>
-      <span>Salidas <b id="miniSaidas">R$ 0,00</b></span>
+      <span>Ingresos <b id="miniEntradas">Fr. 0.00</b></span>
+      <span>Salidas <b id="miniSaidas">Fr. 0.00</b></span>
     </div>
     <div class="summary-total-wrap">
       <div class="summary-label">Saldo</div>
-      <div class="summary-total" id="summaryTotal">R$ 0,00</div>
+      <div class="summary-total" id="summaryTotal">Fr. 0.00</div>
     </div>
   </div>
 </div>
@@ -825,7 +832,11 @@
   const fFotoGaleria = document.getElementById('fFotoGaleria');
 
   function todayStr(){ return new Date().toISOString().slice(0,10); }
-  function fmtBRL(n){ return n.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); }
+  function fmtBRL(n){
+    const abs = Math.abs(n);
+    const formatted = abs.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (n < 0 ? '-Fr. ' : 'Fr. ') + formatted;
+  }
   function fmtDateISO(iso){
     if(!iso) return '';
     const [y,m,d] = iso.split('-');
@@ -1179,6 +1190,14 @@
       (snapshot) => {
         membrosNumerados = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         updateProgressBars();
+        const datalistOficial = document.getElementById('nomesMiembrosOficiais');
+        if(datalistOficial){
+          datalistOficial.innerHTML = membrosNumerados
+            .filter(m => m.status !== 'retirado')
+            .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'))
+            .map(m => `<option value="${escapeHtml(m.nome)}">Nº ${escapeHtml(String(m.numero))}</option>`)
+            .join('');
+        }
       },
       () => { /* silencioso */ }
     );
@@ -1701,7 +1720,7 @@
 
         <div class="r2-amount-row">
           <div class="r2-amount-label">Fr.</div>
-          <div class="r2-amount-value">${fmtBRL(entry.valor).replace('R$', '').trim()}</div>
+          <div class="r2-amount-value">${fmtBRL(entry.valor).replace('Fr.', '').trim()}</div>
         </div>
 
         <div class="r2-words-box">
@@ -2141,7 +2160,7 @@
         <input type="date" id="editData" value="${entry.data || ''}">
       </div>
       <div class="field">
-        <label>Importe (R$)</label>
+        <label>Importe (Fr.)</label>
         <input type="text" id="editValor" value="${String(entry.valor).replace('.', ',')}">
       </div>
     `;
@@ -2213,8 +2232,7 @@
   function buildControleAnualHtml(ano){
     const entradasAno = entries.filter(e => e.tipo === 'entrada' && (e.data || '').slice(0,4) === ano);
 
-    const nomesSet = new Set(colaboradoresNomes);
-    entradasAno.forEach(e => { const p = privadoCache[e.id]; if(p && p.nome) nomesSet.add(p.nome); });
+    const nomesSet = new Set(membrosNumerados.map(m => m.nome));
     const nomes = [...nomesSet].sort((a,b) => a.localeCompare(b, 'pt-BR'));
 
     const grid = {};
@@ -2488,11 +2506,47 @@
   }
 
   btnVerMeuHistorico.addEventListener('click', () => {
-    const numero = membroNumeroInput.value.trim();
-    if(!numero){ membroLookupResult.innerHTML = `<div class="form-error">Ingrese su número de miembro.</div>`; return; }
+    const consulta = membroNumeroInput.value.trim();
+    if(!consulta){ membroLookupResult.innerHTML = `<div class="form-error">Ingrese su número o nombre de miembro.</div>`; return; }
+    let numero = consulta;
+    if(!/^\d+$/.test(consulta)){
+      const encontrado = membrosNumerados.find(m => (m.nome||'').trim().toLowerCase() === consulta.toLowerCase());
+      if(!encontrado){
+        membroLookupResult.innerHTML = `<div class="form-error">No se encontró ningún miembro registrado con el nombre "${escapeHtml(consulta)}". Verifique la ortografía o elija una sugerencia de la lista mientras escribe.</div>`;
+        return;
+      }
+      numero = String(encontrado.numero);
+    }
     membroLookupResult.innerHTML = buildMeuHistoricoHtml(numero);
   });
   membroNumeroInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') btnVerMeuHistorico.click(); });
+
+  document.getElementById('btnVerListaMiembros').addEventListener('click', () => {
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'edit-modal';
+    const ordenados = [...membrosNumerados]
+      .filter(m => m.status !== 'retirado')
+      .sort((a,b) => parseInt(a.numero,10) - parseInt(b.numero,10));
+    const linhas = ordenados.length
+      ? ordenados.map(m => `<tr><td class="controle-total">${escapeHtml(String(m.numero))}</td><td>${escapeHtml(m.nome)}</td></tr>`).join('')
+      : `<tr><td colspan="2" style="text-align:center; font-style:italic; color:var(--ink-soft);">Ningún miembro registrado todavía</td></tr>`;
+    modal.innerHTML = `
+      <h3>Lista de Miembros</h3>
+      <div class="controle-wrap">
+        <table class="controle-table">
+          <thead><tr><th>Número</th><th>Nombre</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </div>
+      <div class="edit-modal-actions">
+        <button type="button" class="btn-cancelar" id="btnCerrarListaMiembros">Cerrar</button>
+      </div>
+    `;
+    backdrop.appendChild(modal);
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    document.body.appendChild(backdrop);
+    modal.querySelector('#btnCerrarListaMiembros').addEventListener('click', () => backdrop.remove());
+  });
 
   function render(){
     updateProgressBars();
