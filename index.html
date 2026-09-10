@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 
 <!-- ============================================================
      FIREBASE — banco de dados compartilhado
@@ -243,7 +244,7 @@
   .report-btn:hover{ background: var(--kraft); }
   .report-btn.public{ border-color: var(--gold); color: var(--gold); }
 
-  .caixa-tabs{ display:flex; gap: 6px; margin: 16px auto 0; max-width: 760px; padding: 0 16px 4px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width: thin; }
+  .caixa-tabs{ display:flex; flex-wrap: wrap; gap: 6px; margin: 16px auto 0; max-width: 760px; padding: 0 16px 4px; justify-content: center; }
   .caixa-tab{ flex:0 0 auto; white-space:nowrap; padding: 10px 14px; border-radius: 999px; border: none; background: rgba(255,255,255,0.14);
     color: var(--kraft-dark); font-family:'Fraunces', serif; font-weight:600; font-size: 12.5px; cursor:pointer;
     text-transform: uppercase; letter-spacing: 0.03em; transition: all .15s ease; }
@@ -670,6 +671,7 @@
     <button class="report-btn" id="btnGerenciarMembros" type="button" style="display:none;">👥 Gestionar Miembros</button>
     <button class="report-btn" id="btnImprimirComprobantes" type="button" style="display:none;">🧾 Imprimir Comprobantes</button>
     <button class="report-btn" id="btnRecibosMembro" type="button" style="display:none;">📑 Recibos de un miembro</button>
+    <button class="report-btn" id="btnGraficoParticipacion" type="button" style="display:none;">📊 Gráfico de Participación</button>
   </div>
 
   <div class="membro-lookup" id="membroLookupBlock" style="display:none;">
@@ -924,6 +926,7 @@
   const btnGerenciarMembros = document.getElementById('btnGerenciarMembros');
   const btnImprimirComprobantes = document.getElementById('btnImprimirComprobantes');
   const btnRecibosMembro = document.getElementById('btnRecibosMembro');
+  const btnGraficoParticipacion = document.getElementById('btnGraficoParticipacion');
   const membroLookupBlock = document.getElementById('membroLookupBlock');
   const membroNumeroInput = document.getElementById('membroNumeroInput');
   const membroLookupResult = document.getElementById('membroLookupResult');
@@ -1109,6 +1112,7 @@
     btnGerenciarMembros.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     btnImprimirComprobantes.style.display = (currentRole === 'admin') ? '' : 'none';
     btnRecibosMembro.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
+    btnGraficoParticipacion.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     membroLookupBlock.style.display = (currentRole === 'membro' && canSeeNames && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     entries = []; privadoCache = {};
     searchTerm = ''; document.getElementById('searchInput').value = '';
@@ -1698,6 +1702,7 @@
     btnGerenciarMembros.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     btnImprimirComprobantes.style.display = isAdmin ? '' : 'none';
     btnRecibosMembro.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
+    btnGraficoParticipacion.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     membroLookupBlock.style.display = (!isAdmin && canSeeNames && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     btnDesbloquearNombres.style.display = (!isAdmin && !canSeeNames) ? '' : 'none';
     updateControleAnualVisibility();
@@ -2393,6 +2398,89 @@
       })
       .sort((a,b) => a.data < b.data ? -1 : (a.data > b.data ? 1 : 0));
   }
+
+  const MESES_CURTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  let chartMensalInstance = null;
+  let chartAnualInstance = null;
+
+  function abrirGraficoParticipacion(){
+    const entradas = entries.filter(e => e.tipo === 'entrada' && e.numeroMembro != null);
+    const anosDisponiveis = [...new Set(entradas.map(e => (e.data||'').slice(0,4)))].filter(Boolean).sort().reverse();
+    const anoAtual = todayStr().slice(0,4);
+    if(!anosDisponiveis.includes(anoAtual)) anosDisponiveis.unshift(anoAtual);
+    let selectedAno = anosDisponiveis[0];
+
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'report-modal';
+    const header = document.createElement('div'); header.className = 'report-modal-header';
+    const titleEl = document.createElement('div'); titleEl.className = 'report-modal-header-title';
+    titleEl.textContent = 'Gráfico de Participación';
+    const selectAno = document.createElement('select');
+    selectAno.style.cssText = 'padding:6px 10px; border-radius:6px; border:1.5px solid var(--line); font-family:\'Inter\', sans-serif;';
+    selectAno.innerHTML = anosDisponiveis.map(a => `<option value="${a}">${a}</option>`).join('');
+    header.appendChild(titleEl); header.appendChild(selectAno);
+    const body = document.createElement('div'); body.className = 'report-modal-body';
+    body.innerHTML = `
+      <div class="report" style="margin-bottom:18px;">
+        <div class="report-title">Miembros que colaboraron por mes — <span id="graficoAnoLabel"></span></div>
+        <div class="report-subtitle">Cantidad de miembros distintos que registraron un pago cada mes, en ${getCaixaLabel(currentCaixa)}.</div>
+        <canvas id="chartMensal" height="220"></canvas>
+      </div>
+      <div class="report">
+        <div class="report-title">Miembros que colaboraron por año</div>
+        <div class="report-subtitle">Cantidad de miembros distintos que colaboraron en cada año, en ${getCaixaLabel(currentCaixa)}.</div>
+        <canvas id="chartAnual" height="220"></canvas>
+      </div>
+    `;
+    modal.appendChild(header); modal.appendChild(body);
+    const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', () => { if(chartMensalInstance) chartMensalInstance.destroy(); if(chartAnualInstance) chartAnualInstance.destroy(); backdrop.remove(); });
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) closeBtn.click(); });
+    backdrop.appendChild(modal); backdrop.appendChild(closeBtn);
+    document.body.appendChild(backdrop);
+
+    function renderCharts(){
+      document.getElementById('graficoAnoLabel').textContent = selectedAno;
+
+      const porMes = new Array(12).fill(0).map(() => new Set());
+      entradas.filter(e => (e.data||'').slice(0,4) === selectedAno).forEach(e => {
+        const mes = parseInt((e.data||'').slice(5,7),10) - 1;
+        if(mes >= 0 && mes < 12) porMes[mes].add(e.numeroMembro);
+      });
+      const dadosMensal = porMes.map(s => s.size);
+
+      const porAno = {};
+      entradas.forEach(e => {
+        const ano = (e.data||'').slice(0,4);
+        if(!ano) return;
+        if(!porAno[ano]) porAno[ano] = new Set();
+        porAno[ano].add(e.numeroMembro);
+      });
+      const anosOrdenados = Object.keys(porAno).sort();
+      const dadosAnual = anosOrdenados.map(a => porAno[a].size);
+
+      if(chartMensalInstance) chartMensalInstance.destroy();
+      if(chartAnualInstance) chartAnualInstance.destroy();
+
+      const corVerde = '#1B4332';
+      const corDourada = '#B8860B';
+
+      chartMensalInstance = new Chart(document.getElementById('chartMensal'), {
+        type: 'bar',
+        data: { labels: MESES_CURTOS, datasets: [{ label: 'Miembros', data: dadosMensal, backgroundColor: corVerde, borderRadius: 4 }] },
+        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+      });
+      chartAnualInstance = new Chart(document.getElementById('chartAnual'), {
+        type: 'bar',
+        data: { labels: anosOrdenados, datasets: [{ label: 'Miembros', data: dadosAnual, backgroundColor: corDourada, borderRadius: 4 }] },
+        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+      });
+    }
+
+    selectAno.addEventListener('change', () => { selectedAno = selectAno.value; renderCharts(); });
+    renderCharts();
+  }
+  btnGraficoParticipacion.addEventListener('click', abrirGraficoParticipacion);
 
   function abrirRecibosMembro(){
     const backdropBusca = document.createElement('div'); backdropBusca.className = 'modal-backdrop';
