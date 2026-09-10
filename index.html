@@ -91,6 +91,16 @@
               allow list: if souAdmin();
               allow create, delete: if souAdmin();
             }
+            match /inventario/{id} {
+              allow read: if request.auth != null;
+              allow create: if souAdminOuVeNombres();
+              allow update, delete: if souAdmin();
+            }
+            match /estoque/{id} {
+              allow read: if request.auth != null;
+              allow create: if souAdminOuVeNombres();
+              allow update, delete: if souAdmin();
+            }
           }
         }
 
@@ -262,6 +272,17 @@
   .projetos-header{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 6px; flex-wrap:wrap; }
   .projetos-header h2{ font-family:'Fraunces', serif; font-size: 19px; color: var(--ledger-green-dark); margin:0; }
   .projetos-intro{ font-size: 12.5px; color: var(--ink-soft); margin: 0 0 16px; }
+  .item-card{ background: var(--paper); border: 1px solid var(--kraft-dark); border-left: 4px solid var(--gold);
+    border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+  .item-card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .item-card-nome{ font-weight:700; font-size: 14.5px; color: var(--ink); }
+  .item-card-desc{ font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+  .item-card-meta{ font-size: 11px; color: var(--ink-soft); margin-top: 6px; }
+  .item-card-qtd{ font-family:'IBM Plex Mono', monospace; font-weight:700; font-size: 15px; color: var(--ledger-green-dark); white-space:nowrap; }
+  .item-card-previsao{ display:inline-block; margin-top:4px; font-size: 10.5px; padding: 2px 8px; border-radius:999px;
+    background: rgba(255,193,7,0.15); color: #8A6D00; font-weight:600; }
+  .item-card-previsao.baixo{ background: rgba(169,58,46,0.12); color: var(--stamp-red); }
+
   .projeto-card{ background: var(--paper); border: 1px solid var(--kraft-dark); border-left: 4px solid var(--ledger-green);
     border-radius: var(--radius); padding: 13px 14px; margin-bottom: 10px; cursor:pointer; transition: box-shadow .15s ease; }
   .projeto-card:hover{ box-shadow: 0 2px 8px rgba(27,67,50,0.12); }
@@ -578,6 +599,8 @@
   <button class="caixa-tab active" data-group="aluguel" type="button">🏠 Alquiler</button>
   <button class="caixa-tab" data-group="manutencao" type="button">🔧 Mantenimiento</button>
   <button class="caixa-tab" data-group="projetos" id="tabGroupProjetos" type="button">📁 Proyectos</button>
+  <button class="caixa-tab" data-group="inventario" id="tabGroupInventario" type="button">📦 Inventario</button>
+  <button class="caixa-tab" data-group="estoque" id="tabGroupEstoque" type="button">📊 Estoque</button>
 </div>
 
 <div class="wrap">
@@ -589,6 +612,24 @@
     </div>
     <p class="projetos-intro">Proyectos puntuales (con inicio y fin), separados de las cajas fijas — por ejemplo, comprar cerámica para un espacio común.</p>
     <div id="projetosListaBody"><div class="status-msg">Cargando proyectos...</div></div>
+  </div>
+
+  <div id="inventarioListArea" style="display:none;">
+    <div class="projetos-header">
+      <h2>📦 Inventario</h2>
+      <button class="report-btn" id="btnNuevoInventario" type="button" style="display:none; flex:0 0 auto;">+ Agregar ítem</button>
+    </div>
+    <p class="projetos-intro">Objetos que hay en el local (incluidas donaciones). Visible para todos; agregar requiere Área Restrita o ADM; eliminar es solo del ADM.</p>
+    <div id="inventarioListaBody"><div class="status-msg">Cargando inventario...</div></div>
+  </div>
+
+  <div id="estoqueListArea" style="display:none;">
+    <div class="projetos-header">
+      <h2>📊 Estoque</h2>
+      <button class="report-btn" id="btnNuevoEstoque" type="button" style="display:none; flex:0 0 auto;">+ Agregar ítem</button>
+    </div>
+    <p class="projetos-intro">Insumos con cantidad actual y previsión de hasta cuándo alcanza. Visible para todos; agregar requiere Área Restrita o ADM; eliminar es solo del ADM.</p>
+    <div id="estoqueListaBody"><div class="status-msg">Cargando estoque...</div></div>
   </div>
 
   <div id="caixaContentArea">
@@ -786,8 +827,12 @@
   };
   let currentCaixa = 'aluguel_geral';
   let projetosCache = []; // [{id, nome, descricao, status, createdAt}]
+  let inventarioCache = [];
+  let unsubscribeInventario = null;
+  let estoqueCache = [];
+  let unsubscribeEstoque = null;
   let unsubscribeProjetos = null;
-  let viewingProjetosList = false;
+  let viewingListaEspecial = null; // null | 'projetos' | 'inventario' | 'estoque'
   let colaboradoresNomes = [];
   let unsubscribeColaboradores = null;
   let entries = [];
@@ -833,6 +878,14 @@
   const summaryBar = document.getElementById('summaryBar');
   const projetosListaBody = document.getElementById('projetosListaBody');
   const btnNuevoProyecto = document.getElementById('btnNuevoProyecto');
+  const tabGroupInventario = document.getElementById('tabGroupInventario');
+  const inventarioListArea = document.getElementById('inventarioListArea');
+  const inventarioListaBody = document.getElementById('inventarioListaBody');
+  const btnNuevoInventario = document.getElementById('btnNuevoInventario');
+  const tabGroupEstoque = document.getElementById('tabGroupEstoque');
+  const estoqueListArea = document.getElementById('estoqueListArea');
+  const estoqueListaBody = document.getElementById('estoqueListaBody');
+  const btnNuevoEstoque = document.getElementById('btnNuevoEstoque');
   const projetoDetailHeader = document.getElementById('projetoDetailHeader');
 
   const listArea = document.getElementById('listArea');
@@ -895,6 +948,13 @@
     const [y,m,d] = iso.split('-');
     if(!y||!m||!d) return iso;
     return `${d}/${m}/${y}`;
+  }
+  function diasDesde(timestamp){
+    if(!timestamp) return null;
+    const dias = Math.floor((Date.now() - timestamp) / 86400000);
+    if(dias <= 0) return 'hoy';
+    if(dias === 1) return 'hace 1 día';
+    return `hace ${dias} días`;
   }
   function parseValor(str){
     if(!str) return NaN;
@@ -989,10 +1049,12 @@
 
   function switchCaixa(caixa){
     currentCaixa = caixa;
-    viewingProjetosList = false;
+    viewingListaEspecial = null;
     const grupo = grupoDeCaixa(caixa);
     document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === grupo));
     projetosListArea.style.display = 'none';
+    inventarioListArea.style.display = 'none';
+    estoqueListArea.style.display = 'none';
     caixaContentArea.style.display = 'block';
     summaryBar.style.display = 'block';
     caixaTitulo.textContent = getCaixaLabel(caixa);
@@ -1097,7 +1159,7 @@
   }
 
   function showProjetosList(){
-    viewingProjetosList = true;
+    viewingListaEspecial = 'projetos';
     if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
     document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === 'projetos'));
     subfundoDetailHeader.style.display = 'none';
@@ -1105,15 +1167,49 @@
     caixaContentArea.style.display = 'none';
     summaryBar.style.display = 'none';
     projetosListArea.style.display = 'block';
+    inventarioListArea.style.display = 'none';
+    estoqueListArea.style.display = 'none';
     btnNuevoProyecto.style.display = currentRole === 'admin' ? '' : 'none';
     renderProjetosList();
+  }
+
+  function showInventarioList(){
+    viewingListaEspecial = 'inventario';
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === 'inventario'));
+    subfundoDetailHeader.style.display = 'none';
+    reservasResumo.style.display = 'none';
+    caixaContentArea.style.display = 'none';
+    summaryBar.style.display = 'none';
+    projetosListArea.style.display = 'none';
+    estoqueListArea.style.display = 'none';
+    inventarioListArea.style.display = 'block';
+    btnNuevoInventario.style.display = (currentRole === 'admin' || canSeeNames) ? '' : 'none';
+    renderInventarioList();
+  }
+
+  function showEstoqueList(){
+    viewingListaEspecial = 'estoque';
+    if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+    document.querySelectorAll('.caixa-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.group === 'estoque'));
+    subfundoDetailHeader.style.display = 'none';
+    reservasResumo.style.display = 'none';
+    caixaContentArea.style.display = 'none';
+    summaryBar.style.display = 'none';
+    projetosListArea.style.display = 'none';
+    inventarioListArea.style.display = 'none';
+    estoqueListArea.style.display = 'block';
+    btnNuevoEstoque.style.display = (currentRole === 'admin' || canSeeNames) ? '' : 'none';
+    renderEstoqueList();
   }
 
   document.querySelectorAll('.caixa-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       const grupo = btn.dataset.group;
       if(grupo === 'projetos'){ showProjetosList(); return; }
-      if(!viewingProjetosList && grupo === grupoDeCaixa(currentCaixa)) return;
+      if(grupo === 'inventario'){ showInventarioList(); return; }
+      if(grupo === 'estoque'){ showEstoqueList(); return; }
+      if(!viewingListaEspecial && grupo === grupoDeCaixa(currentCaixa)) return;
       switchCaixa(grupo === 'aluguel' ? 'aluguel_geral' : 'manutencao');
     });
   });
@@ -1146,7 +1242,7 @@
     unsubscribeProjetos = db.collection('projetos').onSnapshot(
       (snapshot) => {
         projetosCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        if(viewingProjetosList) renderProjetosList();
+        if(viewingListaEspecial === 'projetos') renderProjetosList();
         refreshProjetoHeaderStatus();
       },
       () => { /* silencioso */ }
@@ -1216,6 +1312,124 @@
       alert('No se pudo eliminar el proyecto. Verifique su conexión.');
     }
   }
+
+  // ============ INVENTARIO ============
+  function attachInventarioListener(){
+    if(unsubscribeInventario) return;
+    unsubscribeInventario = db.collection('inventario').orderBy('createdAt', 'desc').onSnapshot(
+      (snapshot) => {
+        inventarioCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if(viewingListaEspecial === 'inventario') renderInventarioList();
+      },
+      () => { /* silencioso */ }
+    );
+  }
+
+  function renderInventarioList(){
+    const isAdmin = currentRole === 'admin';
+    if(!inventarioCache.length){
+      inventarioListaBody.innerHTML = `<div class="empty-state">Aún no hay ítems en el inventario.</div>`;
+      return;
+    }
+    inventarioListaBody.innerHTML = inventarioCache.map(it => `
+      <div class="item-card">
+        <div class="item-card-top">
+          <div>
+            <div class="item-card-nome">${escapeHtml(it.nome)}</div>
+            ${it.descricao ? `<div class="item-card-desc">${escapeHtml(it.descricao)}</div>` : ''}
+            <div class="item-card-meta">${it.data ? fmtDateISO(it.data) : ''}${it.doadoPor ? ` · Donado por ${escapeHtml(it.doadoPor)}` : ''}${it.createdAt ? ` · Agregado ${diasDesde(it.createdAt)}` : ''}</div>
+          </div>
+          ${isAdmin ? `<button class="controle-action-btn controle-del-btn" data-id="${it.id}" type="button" title="Eliminar" onclick="window.__excluirInventarioItem('${it.id}')">✕</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  window.__excluirInventarioItem = async function(id){
+    if(!confirm('¿Eliminar este ítem del inventario?')) return;
+    try{ await db.collection('inventario').doc(id).delete(); }
+    catch(err){ alert('No se pudo eliminar.'); }
+  };
+
+  btnNuevoInventario.addEventListener('click', async () => {
+    const nome = prompt('Nombre del ítem (ej: Mesa plegable):');
+    if(!nome || !nome.trim()) return;
+    const descricao = prompt('Descripción / detalles (opcional):') || '';
+    const doadoPor = prompt('¿Fue donado? ¿Por quién? (opcional, dejar vacío si no aplica):') || '';
+    try{
+      await db.collection('inventario').add({ nome: nome.trim(), descricao: descricao.trim(), doadoPor: doadoPor.trim(), data: todayStr(), createdAt: Date.now() });
+    } catch(err){ alert('No se pudo agregar el ítem.'); }
+  });
+
+  // ============ ESTOQUE ============
+  function attachEstoqueListener(){
+    if(unsubscribeEstoque) return;
+    unsubscribeEstoque = db.collection('estoque').orderBy('nome').onSnapshot(
+      (snapshot) => {
+        estoqueCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        if(viewingListaEspecial === 'estoque') renderEstoqueList();
+      },
+      () => { /* silencioso */ }
+    );
+  }
+
+  function renderEstoqueList(){
+    const isAdmin = currentRole === 'admin';
+    if(!estoqueCache.length){
+      estoqueListaBody.innerHTML = `<div class="empty-state">Aún no hay ítems en el estoque.</div>`;
+      return;
+    }
+    estoqueListaBody.innerHTML = estoqueCache.map(it => {
+      const qtdBaixa = typeof it.quantidade === 'number' && it.quantidade <= 2;
+      return `
+      <div class="item-card">
+        <div class="item-card-top">
+          <div>
+            <div class="item-card-nome">${escapeHtml(it.nome)}</div>
+            ${it.previsao ? `<div class="item-card-previsao ${qtdBaixa ? 'baixo' : ''}">Previsión: ${escapeHtml(it.previsao)}</div>` : ''}
+            <div class="item-card-meta">${(it.updatedAt || it.createdAt) ? `Actualizado ${diasDesde(it.updatedAt || it.createdAt)}` : ''}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="item-card-qtd">${it.quantidade != null ? it.quantidade : '—'}</div>
+            ${isAdmin ? `
+              <div style="margin-top:6px;">
+                <button class="controle-action-btn" type="button" title="Editar cantidad" onclick="window.__editarEstoqueItem('${it.id}')">✎</button>
+                <button class="controle-action-btn controle-del-btn" type="button" title="Eliminar" onclick="window.__excluirEstoqueItem('${it.id}')">✕</button>
+              </div>` : ''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.__editarEstoqueItem = async function(id){
+    const item = estoqueCache.find(i => i.id === id);
+    if(!item) return;
+    const novaQtd = prompt('Nueva cantidad:', item.quantidade != null ? item.quantidade : '');
+    if(novaQtd === null) return;
+    const novaPrevisao = prompt('Previsión (ej: "Hasta noviembre 2026", opcional):', item.previsao || '');
+    if(novaPrevisao === null) return;
+    try{
+      await db.collection('estoque').doc(id).update({ quantidade: novaQtd.trim() === '' ? null : Number(novaQtd), previsao: novaPrevisao.trim(), updatedAt: Date.now() });
+    } catch(err){ alert('No se pudo actualizar.'); }
+  };
+
+  window.__excluirEstoqueItem = async function(id){
+    if(!confirm('¿Eliminar este ítem del estoque?')) return;
+    try{ await db.collection('estoque').doc(id).delete(); }
+    catch(err){ alert('No se pudo eliminar.'); }
+  };
+
+  btnNuevoEstoque.addEventListener('click', async () => {
+    const nome = prompt('Nombre del ítem (ej: Papel higiénico):');
+    if(!nome || !nome.trim()) return;
+    const qtd = prompt('Cantidad actual (número):');
+    if(qtd === null) return;
+    const previsao = prompt('Previsión de hasta cuándo alcanza (ej: "Hasta noviembre 2026", opcional):') || '';
+    try{
+      await db.collection('estoque').add({ nome: nome.trim(), quantidade: qtd.trim() === '' ? null : Number(qtd), previsao: previsao.trim(), createdAt: Date.now() });
+    } catch(err){ alert('No se pudo agregar el ítem.'); }
+  });
 
   btnNuevoProyecto.addEventListener('click', async () => {
     const nome = prompt('Nombre del proyecto (ej: Cerámica del patio):');
@@ -1400,6 +1614,8 @@
       switchCaixa(currentCaixa);
       attachColaboradoresListener();
       attachProjetosListener();
+      attachInventarioListener();
+      attachEstoqueListener();
       attachMembrosNumeradosListener();
     } catch(err){
       loginError.textContent = 'No se pudo ingresar. Verifique que "Authentication > Anónimo" esté activado en Firebase.';
@@ -1427,6 +1643,8 @@
       switchCaixa(currentCaixa);
       attachColaboradoresListener();
       attachProjetosListener();
+      attachInventarioListener();
+      attachEstoqueListener();
       attachMembrosNumeradosListener();
     } catch(err){
       loginError.textContent = 'Contraseña incorrecta o cuenta no configurada en Firebase.';
@@ -1527,6 +1745,8 @@
           applyRoleUI();
           switchCaixa(currentCaixa);
           attachProjetosListener();
+          attachInventarioListener();
+          attachEstoqueListener();
           attachColaboradoresListener();
           attachMembrosNumeradosListener();
         }
