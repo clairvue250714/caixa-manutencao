@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <!-- ============================================================
      FIREBASE — banco de dados compartilhado
@@ -1845,6 +1846,38 @@
     return texto.charAt(0).toUpperCase() + texto.slice(1);
   }
 
+  async function baixarComoPdf(elemento, nomeArquivo){
+    const canvas = await html2canvas(elemento, { backgroundColor: '#FBF7EC', scale: 2 });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidthMm = pdf.internal.pageSize.getWidth();
+    const pageHeightMm = pdf.internal.pageSize.getHeight();
+    const imgWidthMm = pageWidthMm;
+    const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
+    const pxPorMm = canvas.width / imgWidthMm;
+    const alturaPaginaPx = Math.floor(pageHeightMm * pxPorMm);
+
+    let offsetPx = 0;
+    let primeiraPagina = true;
+    while(offsetPx < canvas.height){
+      const fatiaAlturaPx = Math.min(alturaPaginaPx, canvas.height - offsetPx);
+      const canvasFatia = document.createElement('canvas');
+      canvasFatia.width = canvas.width;
+      canvasFatia.height = fatiaAlturaPx;
+      const ctx = canvasFatia.getContext('2d');
+      ctx.fillStyle = '#FBF7EC';
+      ctx.fillRect(0, 0, canvasFatia.width, canvasFatia.height);
+      ctx.drawImage(canvas, 0, offsetPx, canvas.width, fatiaAlturaPx, 0, 0, canvas.width, fatiaAlturaPx);
+      const fatiaImgData = canvasFatia.toDataURL('image/png');
+      const fatiaAlturaMm = (fatiaAlturaPx * imgWidthMm) / canvas.width;
+      if(!primeiraPagina) pdf.addPage();
+      pdf.addImage(fatiaImgData, 'PNG', 0, 0, imgWidthMm, fatiaAlturaMm);
+      primeiraPagina = false;
+      offsetPx += alturaPaginaPx;
+    }
+    pdf.save(nomeArquivo);
+  }
+
   function nomeArquivoRecibo(entry){
     const partes = [];
     partes.push(entry.nome ? entry.nome.trim().replace(/\s+/g,'_') : 'comprovante');
@@ -2270,7 +2303,7 @@
     header.appendChild(titleEl); header.appendChild(tipoSelect); header.appendChild(periodoSelect);
     const body = document.createElement('div'); body.className = 'report-modal-body';
     const actions = document.createElement('div'); actions.className = 'report-modal-actions';
-    actions.innerHTML = `<button type="button" id="btnBaixarRelatorio">⬇ Descargar imagen</button><button type="button" id="btnImprimirRelatorio" class="secondary">🖨 Imprimir</button>`;
+    actions.innerHTML = `<button type="button" id="btnBaixarRelatorio">⬇ Descargar PDF</button><button type="button" id="btnImprimirRelatorio" class="secondary">🖨 Imprimir</button>`;
     modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
     const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
     closeBtn.addEventListener('click', () => backdrop.remove());
@@ -2299,14 +2332,16 @@
       if(mode === 'interno'){ await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id)); }
       refreshBody();
     });
-    modal.querySelector('#btnBaixarRelatorio').addEventListener('click', async () => {
+    modal.querySelector('#btnBaixarRelatorio').addEventListener('click', async (ev) => {
       const reportEl = body.querySelector('.report');
       if(!reportEl) return;
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.textContent = 'Generando PDF...'; btn.disabled = true;
       try{
-        const canvas = await html2canvas(reportEl, { backgroundColor: '#FBF7EC', scale: 2 });
-        const link = document.createElement('a'); link.download = `relatorio-${mode}-${tipoPeriodo}-${selectedValue}.png`;
-        link.href = canvas.toDataURL('image/png'); link.click();
-      } catch(err){ alert('No se pudo generar la imagen del informe. Use la opción Imprimir.'); }
+        await baixarComoPdf(reportEl, `relatorio-${mode}-${tipoPeriodo}-${selectedValue}.pdf`);
+      } catch(err){ alert('No se pudo generar el PDF del informe. Use la opción Imprimir.'); }
+      btn.textContent = original; btn.disabled = false;
     });
     modal.querySelector('#btnImprimirRelatorio').addEventListener('click', () => { printArea.innerHTML = body.innerHTML; window.print(); });
   }
@@ -2499,7 +2534,7 @@
     header.appendChild(titleEl); header.appendChild(select);
     const body = document.createElement('div'); body.className = 'report-modal-body';
     const actions = document.createElement('div'); actions.className = 'report-modal-actions';
-    actions.innerHTML = `<button type="button" id="btnBaixarControle">⬇ Descargar imagen</button><button type="button" id="btnImprimirControle" class="secondary">🖨 Imprimir</button>`;
+    actions.innerHTML = `<button type="button" id="btnBaixarControle">⬇ Descargar PDF</button><button type="button" id="btnImprimirControle" class="secondary">🖨 Imprimir</button>`;
     modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
     const closeBtn = document.createElement('button');
     closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
@@ -2520,14 +2555,15 @@
     refreshBody();
 
     select.addEventListener('change', () => { selectedAno = select.value; refreshBody(); });
-    modal.querySelector('#btnBaixarControle').addEventListener('click', async () => {
+    modal.querySelector('#btnBaixarControle').addEventListener('click', async (ev) => {
       const reportEl = body.querySelector('.report');
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.textContent = 'Generando PDF...'; btn.disabled = true;
       try{
-        const canvas = await html2canvas(reportEl, { backgroundColor: '#FBF7EC', scale: 2 });
-        const link = document.createElement('a');
-        link.download = `controle-anual-${selectedAno}.png`;
-        link.href = canvas.toDataURL('image/png'); link.click();
-      } catch(err){ alert('No se pudo generar la imagen. Use la opción Imprimir.'); }
+        await baixarComoPdf(reportEl, `controle-anual-${selectedAno}.pdf`);
+      } catch(err){ alert('No se pudo generar el PDF. Use la opción Imprimir.'); }
+      btn.textContent = original; btn.disabled = false;
     });
     modal.querySelector('#btnImprimirControle').addEventListener('click', () => {
       printArea.innerHTML = body.innerHTML;
