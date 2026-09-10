@@ -3124,7 +3124,25 @@
           </div>
           <button type="button" class="btn-cancelar" id="btnCopiarLinkFicha" style="margin-bottom:14px;">📋 Copiar enlace</button>
         ` : ''}
-        ${datosHtml}
+        <div id="fichaPdfArea">
+          ${status !== 'pendiente' ? `<p style="font-size:11px; text-align:center; color:var(--ink-soft); margin:0 0 10px; line-height:1.5;">
+            Santa Iglesia Gnóstica Cristiana Universal Samael Aun Weor — Federada en Suiza<br>
+            <b>Lumisial Luz Alba, Isèrables Suíza</b>
+          </p>` : ''}
+          ${datosHtml}
+          ${status !== 'pendiente' ? `
+            <div style="margin-top:40px; display:flex; justify-content:space-between; gap:20px;">
+              <div style="flex:1; text-align:center;">
+                <div style="border-top:1.5px solid var(--ink); margin-top:36px; padding-top:6px; font-size:11px; color:var(--ink-soft);">Firma del miembro</div>
+              </div>
+              <div style="flex:1; text-align:center;">
+                <div style="border-top:1.5px solid var(--ink); margin-top:36px; padding-top:6px; font-size:11px; color:var(--ink-soft);">Firma del Rector</div>
+              </div>
+            </div>
+            <div style="text-align:center; margin-top:16px; font-size:11px; color:var(--ink-soft);">Fecha: ______ / ______ / __________</div>
+          ` : ''}
+        </div>
+        ${status !== 'pendiente' ? `<button type="button" class="btn-cancelar" id="btnDescargarFichaPdf" style="margin-top:12px;">⬇ Descargar PDF</button>` : ''}
         <div class="edit-modal-actions" style="margin-top:16px;">
           <button type="button" class="btn-cancelar" id="btnToggleFicha">${status === 'cerrado' ? '↺ Reabrir' : '🔒 Cerrar ficha'}</button>
           <button type="button" class="btn-salvar" id="btnCerrarPainelFicha">Cerrar ventana</button>
@@ -3140,6 +3158,17 @@
             copiarBtn.textContent = '✓ Copiado';
             setTimeout(() => { copiarBtn.textContent = '📋 Copiar enlace'; }, 1500);
           }).catch(() => {});
+        });
+      }
+      const pdfBtn = gestionBody.querySelector('#btnDescargarFichaPdf');
+      if(pdfBtn){
+        pdfBtn.addEventListener('click', async () => {
+          const original = pdfBtn.textContent;
+          pdfBtn.textContent = 'Generando PDF...'; pdfBtn.disabled = true;
+          try{
+            await baixarComoPdf(gestionBody.querySelector('#fichaPdfArea'), `ficha-${membro.nome.replace(/\s+/g,'_')}.pdf`);
+          } catch(err){ alert('No se pudo generar el PDF.'); }
+          pdfBtn.textContent = original; pdfBtn.disabled = false;
         });
       }
       gestionBody.querySelector('#btnToggleFicha').addEventListener('click', async () => {
