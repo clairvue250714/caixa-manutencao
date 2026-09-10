@@ -308,6 +308,17 @@
   #fichaBody input{ width:100%; font-size: 15px; padding: 10px; border: 1.5px solid var(--line);
     border-radius: 6px; outline:none; background: var(--paper); color: var(--ink); font-family:'Inter', sans-serif; }
   #fichaBody input:focus{ border-color: var(--ledger-green); }
+  #fichaBody select{ width:100%; font-size: 15px; padding: 10px; border: 1.5px solid var(--line);
+    border-radius: 6px; outline:none; background: var(--paper); color: var(--ink); font-family:'Inter', sans-serif; }
+  .ficha-section-title{ font-family:'Fraunces', serif; font-size: 14px; color: var(--ledger-green-dark);
+    text-align:left; margin: 22px 0 10px; padding-bottom: 6px; border-bottom: 1.5px solid var(--kraft-dark); }
+  .ficha-opcional{ font-family:'Inter', sans-serif; font-size: 10.5px; font-weight:400; color: var(--ink-soft); text-transform:none; }
+  .field-row{ display:flex; gap: 10px; }
+  .field-row .field{ flex:1; min-width:0; }
+  .ficha-mision-row{ margin-bottom: 14px; padding: 10px; border: 1px dashed var(--line); border-radius:6px; }
+  .ficha-checkbox-label{ display:flex; align-items:center; gap:8px; font-size: 13.5px; font-weight:600;
+    color: var(--ink); margin-bottom: 8px; cursor:pointer; text-transform:none; letter-spacing:normal; }
+  .ficha-checkbox-label input{ width:auto; }
   .ficha-status-tag{ display:inline-block; font-size: 10.5px; padding: 3px 10px; border-radius: 999px; font-weight:700;
     text-transform: uppercase; letter-spacing:.04em; margin-bottom: 14px; }
   .ficha-status-tag.pendiente{ background: rgba(92,90,78,0.12); color: var(--ink-soft); }
@@ -1798,29 +1809,108 @@
 
   function renderFichaForm(token, data){
     const d = data.dados || {};
+    const m = d.mision || {};
+    const s = d.sacerdocio || {};
     fichaSubtitulo.textContent = data.status === 'completo' ? 'Puede corregir sus datos si es necesario.' : 'Complete sus datos personales.';
     fichaBody.innerHTML = `
       <span class="ficha-status-tag ${data.status === 'completo' ? 'completo' : 'pendiente'}">${data.status === 'completo' ? 'Completo' : 'Pendiente'}</span>
-      <div class="field"><label>Nombre completo</label><input type="text" id="fichaNome" value="${escapeHtml(d.nome||'')}"></div>
-      <div class="field"><label>Nacionalidad</label><input type="text" id="fichaNacionalidad" value="${escapeHtml(d.nacionalidad||'')}"></div>
-      <div class="field"><label>Nº de Pasaporte</label><input type="text" id="fichaPasaporte" value="${escapeHtml(d.pasaporte||'')}"></div>
+      <p style="font-size:11.5px; text-align:center; color:var(--ink-soft); margin:-6px 0 16px; line-height:1.5;">
+        Santa Iglesia Gnóstica Cristiana Universal Samael Aun Weor — Federada en Suiza<br>
+        <b>Lumisial Luz Alba, Isèrables Suíza</b>
+      </p>
+
+      <h4 class="ficha-section-title">Datos personales</h4>
+      <div class="field"><label>Nombre y apellido</label><input type="text" id="fichaNome" value="${escapeHtml(d.nome||'')}"></div>
       <div class="field"><label>Fecha de nacimiento</label><input type="date" id="fichaFechaNac" value="${escapeHtml(d.fechaNacimiento||'')}"></div>
-      <div class="field"><label>Dirección</label><input type="text" id="fichaDireccion" value="${escapeHtml(d.direccion||'')}"></div>
-      <div class="field"><label>Teléfono</label><input type="text" id="fichaTelefone" value="${escapeHtml(d.telefone||'')}"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="fichaEmail" value="${escapeHtml(d.email||'')}"></div>
+      <div class="field"><label>Nacionalidad</label><input type="text" id="fichaNacionalidad" value="${escapeHtml(d.nacionalidad||'')}"></div>
+      <div class="field-row">
+        <div class="field"><label>Tipo de documento</label>
+          <select id="fichaTipoDoc">
+            <option value="">— Seleccione —</option>
+            <option value="Pasaporte" ${d.tipoDocumento==='Pasaporte'?'selected':''}>Pasaporte</option>
+            <option value="Cédula" ${d.tipoDocumento==='Cédula'?'selected':''}>Cédula</option>
+            <option value="DNI" ${d.tipoDocumento==='DNI'?'selected':''}>DNI</option>
+            <option value="Otro" ${d.tipoDocumento==='Otro'?'selected':''}>Otro</option>
+          </select>
+        </div>
+        <div class="field"><label>Número de documento</label><input type="text" id="fichaNumDoc" value="${escapeHtml(d.numeroDocumento||'')}"></div>
+      </div>
+      <div class="field"><label>Fecha de consagración</label><input type="date" id="fichaFechaConsagracion" value="${escapeHtml(d.fechaConsagracion||'')}"></div>
+
+      <h4 class="ficha-section-title">Misión <span class="ficha-opcional">(opcional)</span></h4>
+      ${['local','nacional','internacional'].map(nivel => `
+        <div class="ficha-mision-row">
+          <label class="ficha-checkbox-label">
+            <input type="checkbox" id="fichaMision_${nivel}_hecho" ${m[nivel] && m[nivel].hecho ? 'checked' : ''}>
+            Curso de Misionero ${nivel === 'local' ? 'Local' : (nivel === 'nacional' ? 'Nacional' : 'Internacional')}
+          </label>
+          <div class="field-row">
+            <div class="field"><label>Lugar</label><input type="text" id="fichaMision_${nivel}_lugar" value="${escapeHtml((m[nivel]&&m[nivel].lugar)||'')}"></div>
+            <div class="field"><label>Fecha</label><input type="date" id="fichaMision_${nivel}_fecha" value="${escapeHtml((m[nivel]&&m[nivel].fecha)||'')}"></div>
+          </div>
+        </div>
+      `).join('')}
+
+      <h4 class="ficha-section-title">Sacerdocio <span class="ficha-opcional">(opcional)</span></h4>
+      <div class="field-row">
+        <div class="field"><label>A disposición</label>
+          <select id="fichaADisposicion">
+            <option value="">—</option>
+            <option value="si" ${s.aDisposicion==='si'?'selected':''}>Sí</option>
+            <option value="no" ${s.aDisposicion==='no'?'selected':''}>No</option>
+          </select>
+        </div>
+        <div class="field"><label>Fecha</label><input type="date" id="fichaFechaDisposicion" value="${escapeHtml(s.fechaDisposicion||'')}"></div>
+      </div>
+      <div class="field"><label>Tipo</label>
+        <select id="fichaTipoSacerdocio">
+          <option value="">—</option>
+          <option value="Sacerdote" ${s.tipo==='Sacerdote'?'selected':''}>Sacerdote</option>
+          <option value="Isis" ${s.tipo==='Isis'?'selected':''}>Isis</option>
+        </select>
+      </div>
+      <div class="field"><label>Fecha de consagración (Sacerdocio)</label><input type="date" id="fichaFechaConsagracionSacerdocio" value="${escapeHtml(s.fechaConsagracionSacerdocio||'')}"></div>
+      <div class="field-row">
+        <div class="field"><label>Obispo</label>
+          <select id="fichaObispo">
+            <option value="">—</option>
+            <option value="si" ${s.obispo==='si'?'selected':''}>Sí</option>
+            <option value="no" ${s.obispo==='no'?'selected':''}>No</option>
+          </select>
+        </div>
+        <div class="field"><label>Fecha de consagración</label><input type="date" id="fichaFechaConsagracionObispo" value="${escapeHtml(s.fechaConsagracionObispo||'')}"></div>
+      </div>
+
       <div class="form-error" id="fichaError"></div>
       <button class="login-submit" id="btnGuardarFicha" type="button">Guardar</button>
     `;
     document.getElementById('btnGuardarFicha').addEventListener('click', async () => {
+      const val = (id) => document.getElementById(id).value.trim();
       const dados = {
-        nome: document.getElementById('fichaNome').value.trim(),
-        nacionalidad: document.getElementById('fichaNacionalidad').value.trim(),
-        pasaporte: document.getElementById('fichaPasaporte').value.trim(),
+        nome: val('fichaNome'),
         fechaNacimiento: document.getElementById('fichaFechaNac').value,
-        direccion: document.getElementById('fichaDireccion').value.trim(),
-        telefone: document.getElementById('fichaTelefone').value.trim(),
+        email: val('fichaEmail'),
+        nacionalidad: val('fichaNacionalidad'),
+        tipoDocumento: val('fichaTipoDoc'),
+        numeroDocumento: val('fichaNumDoc'),
+        fechaConsagracion: document.getElementById('fichaFechaConsagracion').value,
+        mision: {
+          local: { hecho: document.getElementById('fichaMision_local_hecho').checked, lugar: val('fichaMision_local_lugar'), fecha: document.getElementById('fichaMision_local_fecha').value },
+          nacional: { hecho: document.getElementById('fichaMision_nacional_hecho').checked, lugar: val('fichaMision_nacional_lugar'), fecha: document.getElementById('fichaMision_nacional_fecha').value },
+          internacional: { hecho: document.getElementById('fichaMision_internacional_hecho').checked, lugar: val('fichaMision_internacional_lugar'), fecha: document.getElementById('fichaMision_internacional_fecha').value },
+        },
+        sacerdocio: {
+          aDisposicion: val('fichaADisposicion'),
+          fechaDisposicion: document.getElementById('fichaFechaDisposicion').value,
+          tipo: val('fichaTipoSacerdocio'),
+          fechaConsagracionSacerdocio: document.getElementById('fichaFechaConsagracionSacerdocio').value,
+          obispo: val('fichaObispo'),
+          fechaConsagracionObispo: document.getElementById('fichaFechaConsagracionObispo').value,
+        },
       };
       if(!dados.nome){
-        document.getElementById('fichaError').textContent = 'Ingrese su nombre completo.';
+        document.getElementById('fichaError').textContent = 'Ingrese su nombre y apellido.';
         return;
       }
       const btn = document.getElementById('btnGuardarFicha');
@@ -2931,13 +3021,27 @@
 
       const status = fichaData.status || 'pendiente';
       const d = fichaData.dados || {};
+      const m = d.mision || {};
+      const s = d.sacerdocio || {};
+      const nivelLabel = { local: 'Local', nacional: 'Nacional', internacional: 'Internacional' };
+      const misionHtml = ['local','nacional','internacional']
+        .filter(n => m[n] && m[n].hecho)
+        .map(n => `<div class="ficha-readonly-row"><div class="k">Misionero ${nivelLabel[n]}</div><div class="v">${escapeHtml(m[n].lugar || '—')} · ${escapeHtml(m[n].fecha || '—')}</div></div>`)
+        .join('');
+      const sacerdocioHtml = (s.aDisposicion || s.tipo || s.obispo) ? `
+        ${s.aDisposicion ? `<div class="ficha-readonly-row"><div class="k">A disposición</div><div class="v">${s.aDisposicion === 'si' ? 'Sí' : 'No'} · ${escapeHtml(s.fechaDisposicion || '—')}</div></div>` : ''}
+        ${s.tipo ? `<div class="ficha-readonly-row"><div class="k">Tipo</div><div class="v">${escapeHtml(s.tipo)} · ${escapeHtml(s.fechaConsagracionSacerdocio || '—')}</div></div>` : ''}
+        ${s.obispo ? `<div class="ficha-readonly-row"><div class="k">Obispo</div><div class="v">${s.obispo === 'si' ? 'Sí' : 'No'} · ${escapeHtml(s.fechaConsagracionObispo || '—')}</div></div>` : ''}
+      ` : '';
       const datosHtml = status !== 'pendiente' ? `
-        <div class="ficha-readonly-row"><div class="k">Nombre</div><div class="v">${escapeHtml(d.nome || '—')}</div></div>
-        <div class="ficha-readonly-row"><div class="k">Nacionalidad</div><div class="v">${escapeHtml(d.nacionalidad || '—')}</div></div>
-        <div class="ficha-readonly-row"><div class="k">Pasaporte</div><div class="v">${escapeHtml(d.pasaporte || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Nombre y apellido</div><div class="v">${escapeHtml(d.nome || '—')}</div></div>
         <div class="ficha-readonly-row"><div class="k">Fecha de nacimiento</div><div class="v">${escapeHtml(d.fechaNacimiento || '—')}</div></div>
-        <div class="ficha-readonly-row"><div class="k">Dirección</div><div class="v">${escapeHtml(d.direccion || '—')}</div></div>
-        <div class="ficha-readonly-row"><div class="k">Teléfono</div><div class="v">${escapeHtml(d.telefone || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">E-mail</div><div class="v">${escapeHtml(d.email || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Nacionalidad</div><div class="v">${escapeHtml(d.nacionalidad || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Documento</div><div class="v">${escapeHtml(d.tipoDocumento || '—')} ${escapeHtml(d.numeroDocumento || '')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Fecha de consagración</div><div class="v">${escapeHtml(d.fechaConsagracion || '—')}</div></div>
+        ${misionHtml}
+        ${sacerdocioHtml}
       ` : `<p style="font-size:13px; color:var(--ink-soft);">Todavía no completó sus datos. Comparta el enlace de abajo.</p>`;
 
       gestionBody.innerHTML = `
