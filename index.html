@@ -84,8 +84,19 @@
                 match /privado/{doc} { allow read: if souAdminOuVeNombres(); allow write: if souAdmin(); }
               }
             }
+            match /fichas/{token} {
+              allow get: if request.auth != null && (souAdmin() || resource.data.status != 'cerrado');
+              allow update: if request.auth != null && (souAdmin() || resource.data.status != 'cerrado');
+              allow list: if souAdmin();
+              allow create, delete: if souAdmin();
+            }
           }
         }
+
+     ⚠ "fichas" guarda datos personales sensibles (pasaporte, etc). El acceso funciona
+     por token secreto en la URL (?ficha=XXXX), no por lista navegable — solo el admin
+     puede "list" (ver todas). Mientras el status no sea 'cerrado', quien tenga el link
+     puede leer y completar esa ficha específica; una vez cerrada, solo el admin accede.
 
      ⚠ Nem administrador nem "ver nombres" conseguem criar, editar ou apagar nada
      além do que as regras acima liberam — só o admin cria/edita/apaga movimentos.
@@ -264,6 +275,21 @@
     background: none; color: var(--ink-soft); cursor:pointer; font-weight:600; }
   .projeto-fechado-aviso{ clear:both; background: #FFF3D6; border: 1.5px solid var(--gold); border-radius: var(--radius);
     padding: 10px 14px; margin-top: 10px; font-size: 12.5px; color: #5A4413; font-weight:600; }
+
+  #fichaBody .field{ text-align:left; margin-bottom: 14px; }
+  #fichaBody label{ display:block; font-size: 11px; text-transform:uppercase; letter-spacing:.05em;
+    color: var(--ink-soft); font-weight:600; margin-bottom: 5px; }
+  #fichaBody input{ width:100%; font-size: 15px; padding: 10px; border: 1.5px solid var(--line);
+    border-radius: 6px; outline:none; background: var(--paper); color: var(--ink); font-family:'Inter', sans-serif; }
+  #fichaBody input:focus{ border-color: var(--ledger-green); }
+  .ficha-status-tag{ display:inline-block; font-size: 10.5px; padding: 3px 10px; border-radius: 999px; font-weight:700;
+    text-transform: uppercase; letter-spacing:.04em; margin-bottom: 14px; }
+  .ficha-status-tag.pendiente{ background: rgba(92,90,78,0.12); color: var(--ink-soft); }
+  .ficha-status-tag.completo{ background: rgba(45,106,79,0.14); color: #2D6A4F; }
+  .ficha-status-tag.cerrado{ background: rgba(169,58,46,0.12); color: var(--stamp-red); }
+  .ficha-readonly-row{ text-align:left; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .ficha-readonly-row .k{ font-size: 10.5px; text-transform:uppercase; letter-spacing:.05em; color: var(--ink-soft); }
+  .ficha-readonly-row .v{ font-size: 14.5px; color: var(--ink); margin-top: 2px; }
 
   .top-actions{ display:flex; justify-content:flex-end; margin-bottom: 8px; }
   .reset-link{ font-size: 11.5px; color: var(--kraft-dark); text-decoration: underline; cursor:pointer; background:none; border:none; }
@@ -518,6 +544,15 @@
   </div>
 </div>
 
+<div class="login-screen" id="fichaScreen" style="display:none;">
+  <div class="login-card" style="max-width:440px;">
+    <div class="stamp-logo">ADM<br>ISÈ.</div>
+    <h2>Ficha personal</h2>
+    <p id="fichaSubtitulo">Cargando...</p>
+    <div id="fichaBody"></div>
+  </div>
+</div>
+
 <div id="appArea" style="display:none;">
 
 <div class="topbar">
@@ -618,6 +653,9 @@
       <div class="field-row">
         <div class="field">
           <label for="fNome">Nombre de quien pagó</label>
+          <select id="fNomeSelect" style="display:none; font-family:'Inter', sans-serif; font-size:15px; padding:9px 0; border:none; border-bottom:1.5px solid var(--line); background:transparent; width:100%; outline:none;">
+            <option value="">— Seleccione un miembro —</option>
+          </select>
           <input type="text" id="fNome" placeholder="Ej: María Silva" list="nomesColaboradores" autocomplete="off">
           <datalist id="nomesColaboradores"></datalist>
           <datalist id="nomesMiembrosOficiais"></datalist>
@@ -634,7 +672,7 @@
           <input type="date" id="fData">
         </div>
         <div class="field" id="fieldDescWrap" style="display:none;">
-          <label for="fDesc">Descripción breve</label>
+          <label for="fDesc" id="labelFDesc">Descripción breve</label>
           <input type="text" id="fDesc" placeholder="Ej: Compras en el mercado">
         </div>
       </div>
@@ -758,6 +796,9 @@
   let unsubscribeSnapshot = null;
 
   const loginScreen = document.getElementById('loginScreen');
+  const fichaScreen = document.getElementById('fichaScreen');
+  const fichaSubtitulo = document.getElementById('fichaSubtitulo');
+  const fichaBody = document.getElementById('fichaBody');
   const appArea = document.getElementById('appArea');
   const btnRoleAdmin = document.getElementById('btnRoleAdmin');
   const btnRoleMembro = document.getElementById('btnRoleMembro');
@@ -797,6 +838,7 @@
   const formError = document.getElementById('formError');
   const addBtn = document.getElementById('addBtn');
   const fNome = document.getElementById('fNome');
+  const fNomeSelect = document.getElementById('fNomeSelect');
   const fDesc = document.getElementById('fDesc');
   const fValor = document.getElementById('fValor');
   const fData = document.getElementById('fData');
@@ -807,6 +849,10 @@
   const fieldProdutosWrap = document.getElementById('fieldProdutosWrap');
   const fieldDestinoWrap = document.getElementById('fieldDestinoWrap');
   const fDestino = document.getElementById('fDestino');
+  const labelFDesc = document.getElementById('labelFDesc');
+  fDestino.addEventListener('change', () => {
+    labelFDesc.textContent = fDestino.value ? 'Descripción breve (opcional)' : 'Descripción breve';
+  });
   const tabEntrada = document.getElementById('tabEntrada');
   const tabSaida = document.getElementById('tabSaida');
   const printArea = document.getElementById('printArea');
@@ -968,7 +1014,10 @@
 
     if(RESERVAS_ALUGUEL.includes(caixa)){
       subfundoDetailHeader.style.display = 'block';
-      subfundoDetailHeader.innerHTML = `<button class="projeto-back-link" id="btnVolverAlquilerGeral" type="button">← Volver a Alquiler General</button>`;
+      subfundoDetailHeader.innerHTML = `
+        <button class="projeto-back-link" id="btnVolverAlquilerGeral" type="button">← Volver a Alquiler General</button>
+        <div class="projeto-fechado-aviso">ℹ️ El dinero de esta reserva siempre viene desde Alquiler General (repase). Aquí solo se registran salidas (gastos) de esta reserva.</div>
+      `;
       subfundoDetailHeader.querySelector('#btnVolverAlquilerGeral').addEventListener('click', () => switchCaixa('aluguel_geral'));
       reservasResumo.style.display = 'none';
     } else {
@@ -994,7 +1043,14 @@
     entries = []; privadoCache = {};
     searchTerm = ''; document.getElementById('searchInput').value = '';
     render();
-    if(currentRole){ attachSnapshot(); if(currentRole === 'admin') switchTipo('entrada'); }
+    if(currentRole){
+      attachSnapshot();
+      if(currentRole === 'admin'){
+        const restritoASaida = RESERVAS_ALUGUEL.includes(caixa);
+        tabEntrada.style.display = restritoASaida ? 'none' : '';
+        switchTipo(restritoASaida ? 'saida' : 'entrada');
+      }
+    }
   }
 
   async function updateReservasResumo(){
@@ -1190,13 +1246,20 @@
       (snapshot) => {
         membrosNumerados = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
         updateProgressBars();
+        const membrosAtivosOrdenados = membrosNumerados
+          .filter(m => m.status !== 'retirado')
+          .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'));
         const datalistOficial = document.getElementById('nomesMiembrosOficiais');
         if(datalistOficial){
-          datalistOficial.innerHTML = membrosNumerados
-            .filter(m => m.status !== 'retirado')
-            .sort((a,b) => (a.nome||'').localeCompare(b.nome||'', 'pt-BR'))
+          datalistOficial.innerHTML = membrosAtivosOrdenados
             .map(m => `<option value="${escapeHtml(m.nome)}">Nº ${escapeHtml(String(m.numero))}</option>`)
             .join('');
+        }
+        if(fNomeSelect){
+          const valorAtual = fNomeSelect.value;
+          fNomeSelect.innerHTML = '<option value="">— Seleccione un miembro —</option>' +
+            membrosAtivosOrdenados.map(m => `<option value="${escapeHtml(m.nome)}">${escapeHtml(m.nome)} (Nº ${escapeHtml(String(m.numero))})</option>`).join('');
+          fNomeSelect.value = valorAtual;
         }
       },
       () => { /* silencioso */ }
@@ -1262,6 +1325,10 @@
       ? ordenados.map(m => {
           const retirado = m.status === 'retirado';
           const nomeExibido = retirado ? `${escapeHtml(m.nome)} <span class="membro-status-tag">retirado</span>` : escapeHtml(m.nome);
+          const fichaStatus = m.fichaStatus || (m.fichaToken ? 'pendiente' : null);
+          const fichaTag = fichaStatus
+            ? `<span class="ficha-status-tag ${fichaStatus}" style="margin:0; font-size:9px; padding:2px 7px;">${fichaStatus === 'completo' ? 'Completo' : (fichaStatus === 'cerrado' ? 'Cerrado' : 'Pendiente')}</span>`
+            : `<span style="font-size:10.5px; color:var(--ink-soft); font-style:italic;">Sin ficha</span>`;
           return `
           <tr class="${retirado ? 'membro-row-retirado' : ''}">
             <td class="controle-total">${escapeHtml(String(m.numero))}</td>
@@ -1271,9 +1338,13 @@
               <button class="controle-action-btn membro-toggle-btn" data-id="${m.id}" data-retirado="${retirado ? '1' : '0'}" type="button" title="${retirado ? 'Reactivar' : 'Marcar como retirado'}">${retirado ? '↺' : '🚪'}</button>
               <button class="controle-action-btn controle-del-btn membro-del-btn" data-id="${m.id}" type="button" title="Eliminar por completo">✕</button>
             </td>
+            <td style="white-space:nowrap;">
+              ${fichaTag}
+              <button class="controle-action-btn membro-ficha-btn" data-id="${m.id}" type="button" title="Ver/gestionar ficha" style="margin-left:6px;">📄</button>
+            </td>
           </tr>`;
         }).join('')
-      : `<tr><td colspan="3" style="text-align:center; font-style:italic; color:var(--ink-soft);">Ningún miembro registrado todavía</td></tr>`;
+      : `<tr><td colspan="4" style="text-align:center; font-style:italic; color:var(--ink-soft);">Ningún miembro registrado todavía</td></tr>`;
     const totalAtivos = membrosNumerados.filter(m => m.status !== 'retirado').length;
     return `
       <div class="report">
@@ -1281,11 +1352,12 @@
         <div class="report-subtitle">Cada miembro tiene un número fijo para consultar su propio historial sin ver los demás nombres. Miembros activos: ${totalAtivos}.</div>
         <div class="controle-wrap">
           <table class="controle-table">
-            <thead><tr><th>Número</th><th>Nombre</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Número</th><th>Nombre</th><th>Acciones</th><th>Ficha</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
         <div class="controle-note">🚪 marca a alguien como retirado — su número e historial se conservan, pero deja de contar en el total de miembros de las barras de progreso. ↺ lo reactiva. ✕ elimina por completo el registro (no borra sus pagos ya hechos).</div>
+        <div class="controle-note">📄 Ficha — datos personales completos (nacionalidad, pasaporte, etc). Cada miembro tiene un enlace único y secreto para completarla; usted decide cuándo abrirlo y cerrarlo.</div>
       </div>`;
   }
 
@@ -1419,6 +1491,14 @@
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     auth = firebase.auth();
+
+    const fichaToken = new URLSearchParams(location.search).get('ficha');
+    if(fichaToken){
+      loginScreen.style.display = 'none';
+      initFichaFlow(fichaToken);
+      return;
+    }
+
     auth.onAuthStateChanged((user) => {
       if(user){
         if(user.email === MEMBER_NAMES_EMAIL){
@@ -1449,6 +1529,76 @@
         entries = []; privadoCache = {};
         appArea.style.display = 'none';
         loginScreen.style.display = 'flex';
+      }
+    });
+  }
+
+  // ============ FICHA PERSONAL (acceso público por link único) ============
+  async function initFichaFlow(token){
+    fichaScreen.style.display = 'flex';
+    try{
+      if(!auth.currentUser){ await auth.signInAnonymously(); }
+    } catch(err){
+      fichaSubtitulo.textContent = '';
+      fichaBody.innerHTML = `<div class="form-error">No se pudo conectar. Intente de nuevo más tarde.</div>`;
+      return;
+    }
+    try{
+      const doc = await db.collection('fichas').doc(token).get();
+      if(!doc.exists){
+        fichaSubtitulo.textContent = '';
+        fichaBody.innerHTML = `<div class="form-error">Este enlace no es válido. Verifique que lo copió completo, o contacte a la administración.</div>`;
+        return;
+      }
+      const data = doc.data();
+      if(data.status === 'cerrado'){
+        fichaSubtitulo.textContent = '';
+        fichaBody.innerHTML = `<div class="form-error">Este formulario ya fue completado y cerrado. Si necesita corregir algo, contacte a la administración.</div>`;
+        return;
+      }
+      renderFichaForm(token, data);
+    } catch(err){
+      fichaSubtitulo.textContent = '';
+      fichaBody.innerHTML = `<div class="form-error">No se pudo cargar este formulario. Verifique su conexión.</div>`;
+    }
+  }
+
+  function renderFichaForm(token, data){
+    const d = data.dados || {};
+    fichaSubtitulo.textContent = data.status === 'completo' ? 'Puede corregir sus datos si es necesario.' : 'Complete sus datos personales.';
+    fichaBody.innerHTML = `
+      <span class="ficha-status-tag ${data.status === 'completo' ? 'completo' : 'pendiente'}">${data.status === 'completo' ? 'Completo' : 'Pendiente'}</span>
+      <div class="field"><label>Nombre completo</label><input type="text" id="fichaNome" value="${escapeHtml(d.nome||'')}"></div>
+      <div class="field"><label>Nacionalidad</label><input type="text" id="fichaNacionalidad" value="${escapeHtml(d.nacionalidad||'')}"></div>
+      <div class="field"><label>Nº de Pasaporte</label><input type="text" id="fichaPasaporte" value="${escapeHtml(d.pasaporte||'')}"></div>
+      <div class="field"><label>Fecha de nacimiento</label><input type="date" id="fichaFechaNac" value="${escapeHtml(d.fechaNacimiento||'')}"></div>
+      <div class="field"><label>Dirección</label><input type="text" id="fichaDireccion" value="${escapeHtml(d.direccion||'')}"></div>
+      <div class="field"><label>Teléfono</label><input type="text" id="fichaTelefone" value="${escapeHtml(d.telefone||'')}"></div>
+      <div class="form-error" id="fichaError"></div>
+      <button class="login-submit" id="btnGuardarFicha" type="button">Guardar</button>
+    `;
+    document.getElementById('btnGuardarFicha').addEventListener('click', async () => {
+      const dados = {
+        nome: document.getElementById('fichaNome').value.trim(),
+        nacionalidad: document.getElementById('fichaNacionalidad').value.trim(),
+        pasaporte: document.getElementById('fichaPasaporte').value.trim(),
+        fechaNacimiento: document.getElementById('fichaFechaNac').value,
+        direccion: document.getElementById('fichaDireccion').value.trim(),
+        telefone: document.getElementById('fichaTelefone').value.trim(),
+      };
+      if(!dados.nome){
+        document.getElementById('fichaError').textContent = 'Ingrese su nombre completo.';
+        return;
+      }
+      const btn = document.getElementById('btnGuardarFicha');
+      btn.disabled = true; btn.textContent = 'Guardando...';
+      try{
+        await db.collection('fichas').doc(token).update({ dados, status: 'completo', completedAt: Date.now() });
+        fichaSubtitulo.textContent = '';
+        fichaBody.innerHTML = `<span class="ficha-status-tag completo">Completo</span><p style="text-align:center; margin-top:14px; line-height:1.6;">¡Gracias! Sus datos fueron guardados correctamente.<br>Ya puede cerrar esta página.</p>`;
+      } catch(err){
+        document.getElementById('fichaError').textContent = 'No se pudo guardar. Verifique su conexión.';
+        btn.disabled = false; btn.textContent = 'Guardar';
       }
     });
   }
@@ -1486,7 +1636,8 @@
     currentTipo = tipo;
     resetPhotoField();
     formError.textContent = '';
-    fNome.value = ''; fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fDestino.value = '';
+    fNome.value = ''; fNomeSelect.value = ''; fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fDestino.value = '';
+    labelFDesc.textContent = 'Descripción breve';
     fData.value = todayStr();
     tabEntrada.classList.toggle('active', tipo === 'entrada');
     tabSaida.classList.toggle('active', tipo === 'saida');
@@ -1499,6 +1650,9 @@
       fieldDestinoWrap.style.display = 'none';
       photoDropArea.style.display = 'none';
       addBtn.textContent = 'Registrar ingreso';
+      const restrito = (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral');
+      fNomeSelect.style.display = restrito ? '' : 'none';
+      fNome.style.display = restrito ? 'none' : '';
     } else {
       slipTitle.textContent = 'Registrar salida (gasto)';
       fieldDescWrap.style.display = '';
@@ -1576,26 +1730,28 @@
 
     try{
       if(currentTipo === 'entrada'){
-        const nome = fNome.value.trim();
-        if(!nome){ formError.textContent = 'Ingrese el nombre de quien pagó.'; addBtn.disabled = false; return; }
+        const restrito = (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral');
+        const nome = restrito ? fNomeSelect.value.trim() : fNome.value.trim();
+        if(!nome){ formError.textContent = restrito ? 'Seleccione un miembro de la lista.' : 'Ingrese el nombre de quien pagó.'; addBtn.disabled = false; return; }
         const receiptNumber = nextReceiptNumber();
-        const numeroMembro = (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral') ? findNumeroPorNome(nome) : null;
+        const numeroMembro = restrito ? findNumeroPorNome(nome) : null;
         const docRef = await movCollection().add({ tipo: 'entrada', valor, data, numeroMembro, createdAt: Date.now() });
         await docRef.collection('privado').doc('dados').set({ nome, receiptNumber });
         privadoCache[docRef.id] = { nome, receiptNumber };
         salvarColaboradorSeNovo(nome);
-        fNome.value = ''; fValor.value = ''; fData.value = todayStr();
+        fNome.value = ''; fNomeSelect.value = ''; fValor.value = ''; fData.value = todayStr();
         openReceiptModal({ id: docRef.id, tipo:'entrada', valor, data, nome, receiptNumber });
       } else {
         const produtos = parseProdutosInput(fProdutos.value);
-        const desc = fDesc.value.trim();
-        if(!desc && produtos.length === 0){ formError.textContent = 'Ingrese la descripción o los productos comprados.'; addBtn.disabled = false; return; }
+        let desc = fDesc.value.trim();
         const destino = (currentCaixa === 'aluguel_geral') ? fDestino.value : '';
+        const labels = { aluguel_luz: 'Electricidad', aluguel_imposto: 'Impuesto Fin de Año', aluguel_emergencia: 'Emergencia' };
+        if(!destino && !desc && produtos.length === 0){ formError.textContent = 'Ingrese la descripción o los productos comprados.'; addBtn.disabled = false; return; }
+        if(destino && !desc && produtos.length === 0){ desc = `Repase a ${labels[destino]}`; }
         await movCollection().add({ tipo: 'saida', descricao: desc, produtos, valor, data, foto: pendingPhoto || null, createdAt: Date.now() });
         if(destino){
-          const labels = { aluguel_luz: 'Electricidad', aluguel_imposto: 'Impuesto Fin de Año', aluguel_emergencia: 'Emergencia' };
           const docRefReserva = await db.collection(CAIXA_COLLECTIONS[destino]).add({ tipo: 'entrada', valor, data, numeroMembro: null, createdAt: Date.now() });
-          await docRefReserva.collection('privado').doc('dados').set({ nome: `Repase desde Alquiler General${desc ? ' — ' + desc : ''}`, receiptNumber: null });
+          await docRefReserva.collection('privado').doc('dados').set({ nome: `Repase desde Alquiler General`, receiptNumber: null });
           updateReservasResumo();
         }
         fDesc.value = ''; fValor.value = ''; fProdutos.value = ''; fData.value = todayStr(); fDestino.value = '';
@@ -2373,6 +2529,107 @@
   }
   btnControleAnual.addEventListener('click', openControleAnualModal);
 
+  function generarToken(){
+    const bytes = new Uint8Array(20);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  function linkDaFicha(token){
+    return `${location.origin}${location.pathname}?ficha=${token}`;
+  }
+
+  async function abrirGestionFicha(membroId, onUpdate){
+    const membro = membrosNumerados.find(m => m.id === membroId);
+    if(!membro) return;
+
+    const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
+    const modal = document.createElement('div'); modal.className = 'edit-modal';
+    modal.innerHTML = `<h3>Ficha de ${escapeHtml(membro.nome)}</h3><div id="fichaGestionBody">Cargando...</div>`;
+    backdrop.appendChild(modal);
+    backdrop.addEventListener('click', (e) => { if(e.target === backdrop) backdrop.remove(); });
+    document.body.appendChild(backdrop);
+    const gestionBody = modal.querySelector('#fichaGestionBody');
+
+    async function renderPainel(){
+      let token = membro.fichaToken;
+      let fichaData = null;
+      if(token){
+        try{
+          const doc = await db.collection('fichas').doc(token).get();
+          if(doc.exists) fichaData = doc.data();
+        } catch(err){ /* ignora */ }
+      }
+
+      if(!token || !fichaData){
+        gestionBody.innerHTML = `
+          <p style="font-size:13px; color:var(--ink-soft); margin-bottom:14px;">Este miembro todavía no tiene un enlace para completar su ficha personal.</p>
+          <button type="button" class="btn-salvar" id="btnGenerarFicha">Generar enlace</button>
+        `;
+        gestionBody.querySelector('#btnGenerarFicha').addEventListener('click', async () => {
+          const novoToken = generarToken();
+          try{
+            await db.collection('fichas').doc(novoToken).set({ numeroMembro: membro.numero, nomeReferencia: membro.nome, status: 'pendiente', dados: {}, createdAt: Date.now() });
+            await db.collection('membros_numerados').doc(membroId).update({ fichaToken: novoToken, fichaStatus: 'pendiente' });
+            membro.fichaToken = novoToken; membro.fichaStatus = 'pendiente';
+            renderPainel();
+          } catch(err){ alert('No se pudo generar el enlace.'); }
+        });
+        return;
+      }
+
+      const status = fichaData.status || 'pendiente';
+      const d = fichaData.dados || {};
+      const datosHtml = status !== 'pendiente' ? `
+        <div class="ficha-readonly-row"><div class="k">Nombre</div><div class="v">${escapeHtml(d.nome || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Nacionalidad</div><div class="v">${escapeHtml(d.nacionalidad || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Pasaporte</div><div class="v">${escapeHtml(d.pasaporte || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Fecha de nacimiento</div><div class="v">${escapeHtml(d.fechaNacimiento || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Dirección</div><div class="v">${escapeHtml(d.direccion || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Teléfono</div><div class="v">${escapeHtml(d.telefone || '—')}</div></div>
+      ` : `<p style="font-size:13px; color:var(--ink-soft);">Todavía no completó sus datos. Comparta el enlace de abajo.</p>`;
+
+      gestionBody.innerHTML = `
+        <span class="ficha-status-tag ${status}">${status === 'completo' ? 'Completo' : (status === 'cerrado' ? 'Cerrado' : 'Pendiente')}</span>
+        ${status !== 'cerrado' ? `
+          <div class="field" style="margin:10px 0;">
+            <label>Enlace para compartir</label>
+            <input type="text" id="fichaLinkInput" value="${linkDaFicha(token)}" readonly style="width:100%; padding:8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px; font-family:'IBM Plex Mono', monospace;">
+          </div>
+          <button type="button" class="btn-cancelar" id="btnCopiarLinkFicha" style="margin-bottom:14px;">📋 Copiar enlace</button>
+        ` : ''}
+        ${datosHtml}
+        <div class="edit-modal-actions" style="margin-top:16px;">
+          <button type="button" class="btn-cancelar" id="btnToggleFicha">${status === 'cerrado' ? '↺ Reabrir' : '🔒 Cerrar ficha'}</button>
+          <button type="button" class="btn-salvar" id="btnCerrarPainelFicha">Cerrar ventana</button>
+        </div>
+      `;
+
+      const copiarBtn = gestionBody.querySelector('#btnCopiarLinkFicha');
+      if(copiarBtn){
+        copiarBtn.addEventListener('click', () => {
+          const input = gestionBody.querySelector('#fichaLinkInput');
+          input.select();
+          navigator.clipboard.writeText(input.value).then(() => {
+            copiarBtn.textContent = '✓ Copiado';
+            setTimeout(() => { copiarBtn.textContent = '📋 Copiar enlace'; }, 1500);
+          }).catch(() => {});
+        });
+      }
+      gestionBody.querySelector('#btnToggleFicha').addEventListener('click', async () => {
+        const novoStatus = status === 'cerrado' ? (d.nome ? 'completo' : 'pendiente') : 'cerrado';
+        try{
+          await db.collection('fichas').doc(token).update({ status: novoStatus });
+          await db.collection('membros_numerados').doc(membroId).update({ fichaStatus: novoStatus });
+          membro.fichaStatus = novoStatus;
+          renderPainel();
+        } catch(err){ alert('No se pudo actualizar el estado de la ficha.'); }
+      });
+      gestionBody.querySelector('#btnCerrarPainelFicha').addEventListener('click', () => { backdrop.remove(); if(onUpdate) onUpdate(); });
+    }
+    renderPainel();
+  }
+
   function openGerenciarMembrosModal(){
     const backdrop = document.createElement('div'); backdrop.className = 'modal-backdrop';
     const modal = document.createElement('div'); modal.className = 'report-modal';
@@ -2423,6 +2680,9 @@
           if(resultado.ok){ refreshBody(); updateProgressBars(); }
           else{ alert(resultado.msg); }
         });
+      });
+      body.querySelectorAll('.membro-ficha-btn').forEach(btn => {
+        btn.addEventListener('click', () => abrirGestionFicha(btn.dataset.id, refreshBody));
       });
     }
     refreshBody();
