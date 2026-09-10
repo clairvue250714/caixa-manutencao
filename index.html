@@ -319,6 +319,10 @@
   .ficha-checkbox-label{ display:flex; align-items:center; gap:8px; font-size: 13.5px; font-weight:600;
     color: var(--ink); margin-bottom: 8px; cursor:pointer; text-transform:none; letter-spacing:normal; }
   .ficha-checkbox-label input{ width:auto; }
+  .ficha-add-curso-btn{ width:100%; padding: 10px; border-radius: 6px; border: 1.5px dashed var(--ledger-green);
+    background: none; color: var(--ledger-green-dark); font-weight:600; font-size: 13px; cursor:pointer; margin-bottom: 8px; }
+  .ficha-remove-curso-btn{ font-size: 11px; padding: 3px 9px; border-radius:999px; border: 1px solid var(--stamp-red);
+    background:none; color: var(--stamp-red); cursor:pointer; font-weight:600; }
   .ficha-status-tag{ display:inline-block; font-size: 10.5px; padding: 3px 10px; border-radius: 999px; font-weight:700;
     text-transform: uppercase; letter-spacing:.04em; margin-bottom: 14px; }
   .ficha-status-tag.pendiente{ background: rgba(92,90,78,0.12); color: var(--ink-soft); }
@@ -1811,6 +1815,48 @@
     const d = data.dados || {};
     const m = d.mision || {};
     const s = d.sacerdocio || {};
+    let otrosCursos = Array.isArray(d.otrosCursos) ? d.otrosCursos.map(c => ({...c})) : [];
+
+    function renderOtrosCursos(){
+      const container = document.getElementById('fichaOtrosCursosContainer');
+      if(!container) return;
+      container.innerHTML = otrosCursos.map((c, i) => `
+        <div class="ficha-mision-row">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:13px; font-weight:600;">Curso adicional ${i+1}</span>
+            <button type="button" class="ficha-remove-curso-btn" data-idx="${i}">✕ Quitar</button>
+          </div>
+          <div class="field"><label>Nombre del curso</label><input type="text" class="fichaOtroCursoNombre" data-idx="${i}" value="${escapeHtml(c.nombre||'')}"></div>
+          <div class="field-row">
+            <div class="field"><label>Lugar</label><input type="text" class="fichaOtroCursoLugar" data-idx="${i}" value="${escapeHtml(c.lugar||'')}"></div>
+            <div class="field"><label>Fecha</label><input type="date" class="fichaOtroCursoFecha" data-idx="${i}" value="${escapeHtml(c.fecha||'')}"></div>
+          </div>
+        </div>
+      `).join('');
+      container.querySelectorAll('.ficha-remove-curso-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          sincronizarOtrosCursos();
+          otrosCursos.splice(parseInt(btn.dataset.idx,10), 1);
+          renderOtrosCursos();
+        });
+      });
+    }
+
+    function sincronizarOtrosCursos(){
+      document.querySelectorAll('.fichaOtroCursoNombre').forEach(input => {
+        const i = parseInt(input.dataset.idx,10);
+        if(otrosCursos[i]) otrosCursos[i].nombre = input.value.trim();
+      });
+      document.querySelectorAll('.fichaOtroCursoLugar').forEach(input => {
+        const i = parseInt(input.dataset.idx,10);
+        if(otrosCursos[i]) otrosCursos[i].lugar = input.value.trim();
+      });
+      document.querySelectorAll('.fichaOtroCursoFecha').forEach(input => {
+        const i = parseInt(input.dataset.idx,10);
+        if(otrosCursos[i]) otrosCursos[i].fecha = input.value;
+      });
+    }
+
     fichaSubtitulo.textContent = data.status === 'completo' ? 'Puede corregir sus datos si es necesario.' : 'Complete sus datos personales.';
     fichaBody.innerHTML = `
       <span class="ficha-status-tag ${data.status === 'completo' ? 'completo' : 'pendiente'}">${data.status === 'completo' ? 'Completo' : 'Pendiente'}</span>
@@ -1837,6 +1883,10 @@
         <div class="field"><label>Número de documento</label><input type="text" id="fichaNumDoc" value="${escapeHtml(d.numeroDocumento||'')}"></div>
       </div>
       <div class="field"><label>Fecha de consagración</label><input type="date" id="fichaFechaConsagracion" value="${escapeHtml(d.fechaConsagracion||'')}"></div>
+      <div class="field-row">
+        <div class="field"><label>Teléfono <span class="ficha-opcional">(opcional)</span></label><input type="tel" id="fichaTelefone" value="${escapeHtml(d.telefone||'')}"></div>
+        <div class="field"><label>Teléfono de emergencia <span class="ficha-opcional">(opcional)</span></label><input type="tel" id="fichaTelefoneEmergencia" value="${escapeHtml(d.telefoneEmergencia||'')}"></div>
+      </div>
 
       <h4 class="ficha-section-title">Misión <span class="ficha-opcional">(opcional)</span></h4>
       ${['local','nacional','internacional'].map(nivel => `
@@ -1851,6 +1901,10 @@
           </div>
         </div>
       `).join('')}
+
+      <div id="fichaOtrosCursosContainer"></div>
+      <button type="button" class="ficha-add-curso-btn" id="btnAgregarCurso">+ Agregar otro curso</button>
+
 
       <h4 class="ficha-section-title">Sacerdocio <span class="ficha-opcional">(opcional)</span></h4>
       <div class="field-row">
@@ -1885,7 +1939,14 @@
       <div class="form-error" id="fichaError"></div>
       <button class="login-submit" id="btnGuardarFicha" type="button">Guardar</button>
     `;
+    renderOtrosCursos();
+    document.getElementById('btnAgregarCurso').addEventListener('click', () => {
+      sincronizarOtrosCursos();
+      otrosCursos.push({ nombre:'', lugar:'', fecha:'' });
+      renderOtrosCursos();
+    });
     document.getElementById('btnGuardarFicha').addEventListener('click', async () => {
+      sincronizarOtrosCursos();
       const val = (id) => document.getElementById(id).value.trim();
       const dados = {
         nome: val('fichaNome'),
@@ -1895,6 +1956,9 @@
         tipoDocumento: val('fichaTipoDoc'),
         numeroDocumento: val('fichaNumDoc'),
         fechaConsagracion: document.getElementById('fichaFechaConsagracion').value,
+        telefone: val('fichaTelefone'),
+        telefoneEmergencia: val('fichaTelefoneEmergencia'),
+        otrosCursos: otrosCursos.filter(c => c.nombre || c.lugar || c.fecha),
         mision: {
           local: { hecho: document.getElementById('fichaMision_local_hecho').checked, lugar: val('fichaMision_local_lugar'), fecha: document.getElementById('fichaMision_local_fecha').value },
           nacional: { hecho: document.getElementById('fichaMision_nacional_hecho').checked, lugar: val('fichaMision_nacional_lugar'), fecha: document.getElementById('fichaMision_nacional_fecha').value },
@@ -3033,6 +3097,10 @@
         ${s.tipo ? `<div class="ficha-readonly-row"><div class="k">Tipo</div><div class="v">${escapeHtml(s.tipo)} · ${escapeHtml(s.fechaConsagracionSacerdocio || '—')}</div></div>` : ''}
         ${s.obispo ? `<div class="ficha-readonly-row"><div class="k">Obispo</div><div class="v">${s.obispo === 'si' ? 'Sí' : 'No'} · ${escapeHtml(s.fechaConsagracionObispo || '—')}</div></div>` : ''}
       ` : '';
+      const otrosCursosHtml = (Array.isArray(d.otrosCursos) ? d.otrosCursos : [])
+        .filter(c => c.nombre || c.lugar || c.fecha)
+        .map(c => `<div class="ficha-readonly-row"><div class="k">${escapeHtml(c.nombre || 'Curso adicional')}</div><div class="v">${escapeHtml(c.lugar || '—')} · ${escapeHtml(c.fecha || '—')}</div></div>`)
+        .join('');
       const datosHtml = status !== 'pendiente' ? `
         <div class="ficha-readonly-row"><div class="k">Nombre y apellido</div><div class="v">${escapeHtml(d.nome || '—')}</div></div>
         <div class="ficha-readonly-row"><div class="k">Fecha de nacimiento</div><div class="v">${escapeHtml(d.fechaNacimiento || '—')}</div></div>
@@ -3040,7 +3108,10 @@
         <div class="ficha-readonly-row"><div class="k">Nacionalidad</div><div class="v">${escapeHtml(d.nacionalidad || '—')}</div></div>
         <div class="ficha-readonly-row"><div class="k">Documento</div><div class="v">${escapeHtml(d.tipoDocumento || '—')} ${escapeHtml(d.numeroDocumento || '')}</div></div>
         <div class="ficha-readonly-row"><div class="k">Fecha de consagración</div><div class="v">${escapeHtml(d.fechaConsagracion || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Teléfono</div><div class="v">${escapeHtml(d.telefone || '—')}</div></div>
+        <div class="ficha-readonly-row"><div class="k">Teléfono de emergencia</div><div class="v">${escapeHtml(d.telefoneEmergencia || '—')}</div></div>
         ${misionHtml}
+        ${otrosCursosHtml}
         ${sacerdocioHtml}
       ` : `<p style="font-size:13px; color:var(--ink-soft);">Todavía no completó sus datos. Comparta el enlace de abajo.</p>`;
 
