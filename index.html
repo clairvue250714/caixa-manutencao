@@ -568,7 +568,7 @@
     </div>
     <div class="topbar-right">
       <span class="role-badge" id="roleBadge">membro</span>
-      <button class="logout-link" id="btnDesbloquearNombres" type="button" style="display:none;">🔓 ver nombres</button>
+      <button class="logout-link" id="btnDesbloquearNombres" type="button" style="display:none;">🔒 Área Restrita</button>
       <button class="logout-link" id="logoutBtn" type="button">salir</button>
     </div>
   </div>
@@ -1047,7 +1047,7 @@
     btnGerenciarMembros.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     btnImprimirComprobantes.style.display = (currentRole === 'admin') ? '' : 'none';
     btnRecibosMembro.style.display = (currentRole === 'admin' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
-    membroLookupBlock.style.display = (currentRole === 'membro' && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
+    membroLookupBlock.style.display = (currentRole === 'membro' && canSeeNames && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     entries = []; privadoCache = {};
     searchTerm = ''; document.getElementById('searchInput').value = '';
     render();
@@ -1446,7 +1446,7 @@
   });
 
   btnDesbloquearNombres.addEventListener('click', async () => {
-    const codigo = prompt('Código para ver los nombres (no habilita edición):');
+    const codigo = prompt('Contraseña del Área Restrita (permite ver nombres, informes completos y buscar historiales — no habilita edición):');
     if(!codigo) return;
     try{
       await auth.signInWithEmailAndPassword(MEMBER_NAMES_EMAIL, codigo);
@@ -1455,7 +1455,7 @@
       await loadPrivadoFor(entries.filter(e => e.tipo === 'entrada').map(e => e.id));
       render();
     } catch(err){
-      alert('Código incorrecto o cuenta no configurada en Firebase.');
+      alert('Contraseña incorrecta o cuenta no configurada en Firebase.');
     }
   });
 
@@ -1472,7 +1472,7 @@
   function applyRoleUI(){
     const isAdmin = currentRole === 'admin';
     const podeVerNombres = isAdmin || canSeeNames;
-    roleBadge.textContent = isAdmin ? 'ADM' : (canSeeNames ? 'MEMBRO 🔓' : 'MEMBRO');
+    roleBadge.textContent = isAdmin ? 'ADM' : (canSeeNames ? 'MEMBRO · RESTRITA' : 'MEMBRO');
     roleBadge.classList.toggle('admin', isAdmin);
     updateAdminFormVisibility();
     topActionsAdmin.style.display = isAdmin ? 'flex' : 'none';
@@ -1480,7 +1480,7 @@
     btnGerenciarMembros.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
     btnImprimirComprobantes.style.display = isAdmin ? '' : 'none';
     btnRecibosMembro.style.display = (isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? '' : 'none';
-    membroLookupBlock.style.display = (!isAdmin && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
+    membroLookupBlock.style.display = (!isAdmin && canSeeNames && (currentCaixa === 'manutencao' || currentCaixa === 'aluguel_geral')) ? 'block' : 'none';
     btnDesbloquearNombres.style.display = (!isAdmin && !canSeeNames) ? '' : 'none';
     updateControleAnualVisibility();
     if(isAdmin) switchTipo('entrada');
