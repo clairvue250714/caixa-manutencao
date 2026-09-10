@@ -243,6 +243,9 @@
   .caixa-subtab{ flex:0 0 auto; white-space:nowrap; padding: 8px 12px; border-radius: 999px;
     border: 1.5px solid var(--kraft-dark); background: var(--paper); color: var(--ink-soft);
     font-family:'Inter', sans-serif; font-weight:600; font-size: 12px; cursor:pointer; transition: all .15s ease; }
+  .caixa-titulo{ font-family:'Fraunces', serif; font-size: 21px; color: var(--ledger-green-dark);
+    margin: 4px 0 16px; padding-bottom: 10px; border-bottom: 2px solid var(--kraft-dark); }
+
   .reservas-resumo{ display:flex; flex-direction:column; gap:8px; margin-bottom: 18px; }
   .reservas-resumo-title{ font-family:'Fraunces', serif; font-size: 13px; text-transform:uppercase; letter-spacing:.05em; color: var(--ledger-green-dark); margin-bottom: 2px; }
   .reserva-card{ background: var(--paper); border: 1px solid var(--kraft-dark); border-left: 4px solid var(--gold);
@@ -589,6 +592,8 @@
 
   <div id="caixaContentArea">
 
+  <h2 id="caixaTitulo" class="caixa-titulo"></h2>
+
   <div id="projetoDetailHeader" style="display:none;"></div>
 
   <div class="meta-banner" id="metaBanner" style="display:none;"></div>
@@ -819,6 +824,7 @@
   const progressValorBlock = document.getElementById('progressValorBlock');
   const progressValorFill = document.getElementById('progressValorFill');
   const subfundoDetailHeader = document.getElementById('subfundoDetailHeader');
+  const caixaTitulo = document.getElementById('caixaTitulo');
   const reservasResumo = document.getElementById('reservasResumo');
   const tabGroupProjetos = document.getElementById('tabGroupProjetos');
   const projetosListArea = document.getElementById('projetosListArea');
@@ -988,6 +994,7 @@
     projetosListArea.style.display = 'none';
     caixaContentArea.style.display = 'block';
     summaryBar.style.display = 'block';
+    caixaTitulo.textContent = getCaixaLabel(caixa);
     if(isProjeto(caixa)){
       const p = projetosCache.find(pr => pr.id === projetoIdDe(caixa));
       const fechado = p && p.status === 'fechado';
@@ -1748,7 +1755,7 @@
         const labels = { aluguel_luz: 'Electricidad', aluguel_imposto: 'Impuesto Fin de Año', aluguel_emergencia: 'Emergencia' };
         if(!destino && !desc && produtos.length === 0){ formError.textContent = 'Ingrese la descripción o los productos comprados.'; addBtn.disabled = false; return; }
         if(destino && !desc && produtos.length === 0){ desc = `Repase a ${labels[destino]}`; }
-        await movCollection().add({ tipo: 'saida', descricao: desc, produtos, valor, data, foto: pendingPhoto || null, createdAt: Date.now() });
+        await movCollection().add({ tipo: 'saida', descricao: desc, produtos, valor, data, foto: pendingPhoto || null, destino: destino || null, createdAt: Date.now() });
         if(destino){
           const docRefReserva = await db.collection(CAIXA_COLLECTIONS[destino]).add({ tipo: 'entrada', valor, data, numeroMembro: null, createdAt: Date.now() });
           await docRefReserva.collection('privado').doc('dados').set({ nome: `Repase desde Alquiler General`, receiptNumber: null });
@@ -2853,6 +2860,10 @@
         } else {
           titulo = e.descricao || (e.produtos && e.produtos[0]) || 'Salida de la caja';
           descLine = 'Salida de la caja';
+          if(e.destino){
+            const labelsDestino = { aluguel_luz: 'Electricidad', aluguel_imposto: 'Impuesto Fin de Año', aluguel_emergencia: 'Emergencia' };
+            descLine = `→ Repase a ${labelsDestino[e.destino] || e.destino}`;
+          }
           if(e.produtos && e.produtos.length){ produtosHtml = `<div class="entry-produtos">${e.produtos.map(p => `<span class="produto-tag">${escapeHtml(p)}</span>`).join('')}</div>`; }
         }
         row.innerHTML = `
