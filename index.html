@@ -2712,10 +2712,12 @@
         <div class="report">
           <div class="report-title">Miembros que colaboraron por mes — ${selectedAno}</div>
           <div class="report-subtitle">Cantidad de miembros distintos que registraron un pago cada mes, en ${getCaixaLabel(currentCaixa)}.</div>
-          <img src="${imgUrl}" style="width:100%; max-width:600px;">
+          <img id="graficoImgImprimir" style="width:100%; max-width:600px;">
         </div>
       `;
-      window.print();
+      const img = document.getElementById('graficoImgImprimir');
+      img.addEventListener('load', () => { window.print(); });
+      img.src = imgUrl;
     });
   }
   btnGraficoParticipacion.addEventListener('click', abrirGraficoParticipacion);
