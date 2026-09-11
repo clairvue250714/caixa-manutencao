@@ -2628,7 +2628,6 @@
 
   const MESES_CURTOS = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   let chartMensalInstance = null;
-  let chartAnualInstance = null;
 
   function abrirGraficoParticipacion(){
     const entradas = entries.filter(e => e.tipo === 'entrada' && e.numeroMembro != null);
@@ -2648,23 +2647,40 @@
     header.appendChild(titleEl); header.appendChild(selectAno);
     const body = document.createElement('div'); body.className = 'report-modal-body';
     body.innerHTML = `
-      <div class="report" style="margin-bottom:18px;">
+      <div class="report" id="graficoReportEl">
         <div class="report-title">Miembros que colaboraron por mes — <span id="graficoAnoLabel"></span></div>
         <div class="report-subtitle">Cantidad de miembros distintos que registraron un pago cada mes, en ${getCaixaLabel(currentCaixa)}.</div>
         <canvas id="chartMensal" height="220"></canvas>
       </div>
-      <div class="report">
-        <div class="report-title">Miembros que colaboraron por año</div>
-        <div class="report-subtitle">Cantidad de miembros distintos que colaboraron en cada año, en ${getCaixaLabel(currentCaixa)}.</div>
-        <canvas id="chartAnual" height="220"></canvas>
-      </div>
     `;
-    modal.appendChild(header); modal.appendChild(body);
+    const actions = document.createElement('div'); actions.className = 'report-modal-actions';
+    actions.innerHTML = `<button type="button" id="btnImprimirGrafico">🖨 Imprimir</button>`;
+    modal.appendChild(header); modal.appendChild(body); modal.appendChild(actions);
     const closeBtn = document.createElement('button'); closeBtn.className = 'modal-close'; closeBtn.textContent = '✕';
-    closeBtn.addEventListener('click', () => { if(chartMensalInstance) chartMensalInstance.destroy(); if(chartAnualInstance) chartAnualInstance.destroy(); backdrop.remove(); });
+    closeBtn.addEventListener('click', () => { if(chartMensalInstance) chartMensalInstance.destroy(); backdrop.remove(); });
     backdrop.addEventListener('click', (e) => { if(e.target === backdrop) closeBtn.click(); });
     backdrop.appendChild(modal); backdrop.appendChild(closeBtn);
     document.body.appendChild(backdrop);
+
+    const valorLabelPlugin = {
+      id: 'valorLabel',
+      afterDatasetsDraw(chart){
+        const ctx = chart.ctx;
+        chart.data.datasets.forEach((dataset, i) => {
+          const meta = chart.getDatasetMeta(i);
+          meta.data.forEach((bar, index) => {
+            const valor = dataset.data[index];
+            if(valor == null) return;
+            ctx.save();
+            ctx.fillStyle = '#3d3223';
+            ctx.font = "600 12px 'IBM Plex Mono', monospace";
+            ctx.textAlign = 'center';
+            ctx.fillText(String(valor), bar.x, bar.y - 6);
+            ctx.restore();
+          });
+        });
+      }
+    };
 
     function renderCharts(){
       document.getElementById('graficoAnoLabel').textContent = selectedAno;
@@ -2676,36 +2692,31 @@
       });
       const dadosMensal = porMes.map(s => s.size);
 
-      const porAno = {};
-      entradas.forEach(e => {
-        const ano = (e.data||'').slice(0,4);
-        if(!ano) return;
-        if(!porAno[ano]) porAno[ano] = new Set();
-        porAno[ano].add(e.numeroMembro);
-      });
-      const anosOrdenados = Object.keys(porAno).sort();
-      const dadosAnual = anosOrdenados.map(a => porAno[a].size);
-
       if(chartMensalInstance) chartMensalInstance.destroy();
-      if(chartAnualInstance) chartAnualInstance.destroy();
-
       const corVerde = '#1B4332';
-      const corDourada = '#B8860B';
 
       chartMensalInstance = new Chart(document.getElementById('chartMensal'), {
         type: 'bar',
-        data: { labels: MESES_CURTOS, datasets: [{ label: 'Miembros', data: dadosMensal, backgroundColor: corVerde, borderRadius: 4 }] },
-        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
-      });
-      chartAnualInstance = new Chart(document.getElementById('chartAnual'), {
-        type: 'bar',
-        data: { labels: anosOrdenados, datasets: [{ label: 'Miembros', data: dadosAnual, backgroundColor: corDourada, borderRadius: 4 }] },
-        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } }
+        data: { labels: MESES_CURTOS, datasets: [{ label: 'Miembros', data: dadosMensal, backgroundColor: corVerde, borderRadius: 4, maxBarThickness: 42 }] },
+        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ stepSize:1 } } } },
+        plugins: [valorLabelPlugin]
       });
     }
 
     selectAno.addEventListener('change', () => { selectedAno = selectAno.value; renderCharts(); });
     renderCharts();
+
+    document.getElementById('btnImprimirGrafico').addEventListener('click', () => {
+      const imgUrl = chartMensalInstance.toBase64Image();
+      printArea.innerHTML = `
+        <div class="report">
+          <div class="report-title">Miembros que colaboraron por mes — ${selectedAno}</div>
+          <div class="report-subtitle">Cantidad de miembros distintos que registraron un pago cada mes, en ${getCaixaLabel(currentCaixa)}.</div>
+          <img src="${imgUrl}" style="width:100%; max-width:600px;">
+        </div>
+      `;
+      window.print();
+    });
   }
   btnGraficoParticipacion.addEventListener('click', abrirGraficoParticipacion);
 
