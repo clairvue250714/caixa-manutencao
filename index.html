@@ -531,6 +531,12 @@
   .report-totals .rt-row b{ font-family:'IBM Plex Mono', monospace; color: var(--ink); }
   .report-totals .rt-saldo{ font-weight:700; font-size:15.5px; margin-top:6px; border-top:1px dashed var(--line); padding-top:8px; color: var(--ledger-green-dark); }
 
+  .pdf-export-mode{ font-size: 80% !important; }
+  .pdf-export-mode table{ font-size: 0.85em !important; }
+  .pdf-export-mode .report-title{ font-size: 15px !important; }
+  .pdf-export-mode .report-subtitle{ font-size: 10.5px !important; }
+  .pdf-export-mode th, .pdf-export-mode td{ padding: 5px 6px !important; }
+
   .comp-print-header{ font-family: 'Fraunces', serif; font-size:16px; color: var(--ledger-green-dark); margin-bottom: 14px; }
   .comp-print-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .comp-item{ border:1px solid #ccc; border-radius:4px; padding:8px; break-inside: avoid; }
@@ -2226,15 +2232,22 @@
   }
 
   async function baixarComoPdf(elemento, nomeArquivo){
-    const canvas = await html2canvas(elemento, { backgroundColor: '#FBF7EC', scale: 2 });
+    elemento.classList.add('pdf-export-mode');
+    let canvas;
+    try{
+      canvas = await html2canvas(elemento, { backgroundColor: '#FFFFFF', scale: 2 });
+    } finally {
+      elemento.classList.remove('pdf-export-mode');
+    }
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margemMm = 10;
     const pageWidthMm = pdf.internal.pageSize.getWidth();
     const pageHeightMm = pdf.internal.pageSize.getHeight();
-    const imgWidthMm = pageWidthMm;
-    const imgHeightMm = (canvas.height * imgWidthMm) / canvas.width;
+    const imgWidthMm = pageWidthMm - (margemMm * 2);
+    const alturaUtilMm = pageHeightMm - (margemMm * 2);
     const pxPorMm = canvas.width / imgWidthMm;
-    const alturaPaginaPx = Math.floor(pageHeightMm * pxPorMm);
+    const alturaPaginaPx = Math.floor(alturaUtilMm * pxPorMm);
 
     let offsetPx = 0;
     let primeiraPagina = true;
@@ -2244,13 +2257,13 @@
       canvasFatia.width = canvas.width;
       canvasFatia.height = fatiaAlturaPx;
       const ctx = canvasFatia.getContext('2d');
-      ctx.fillStyle = '#FBF7EC';
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvasFatia.width, canvasFatia.height);
       ctx.drawImage(canvas, 0, offsetPx, canvas.width, fatiaAlturaPx, 0, 0, canvas.width, fatiaAlturaPx);
       const fatiaImgData = canvasFatia.toDataURL('image/png');
       const fatiaAlturaMm = (fatiaAlturaPx * imgWidthMm) / canvas.width;
       if(!primeiraPagina) pdf.addPage();
-      pdf.addImage(fatiaImgData, 'PNG', 0, 0, imgWidthMm, fatiaAlturaMm);
+      pdf.addImage(fatiaImgData, 'PNG', margemMm, margemMm, imgWidthMm, fatiaAlturaMm);
       primeiraPagina = false;
       offsetPx += alturaPaginaPx;
     }
@@ -2338,7 +2351,7 @@
     wrap.querySelector('#btnBaixarRecibo').addEventListener('click', async () => {
       const card = wrap.querySelector('#receiptCard');
       try{
-        const canvas = await html2canvas(card, { backgroundColor: '#FBF7EC', scale: 2 });
+        const canvas = await html2canvas(card, { backgroundColor: '#FFFFFF', scale: 2 });
         const link = document.createElement('a');
         link.download = nomeArquivoRecibo(entry);
         link.href = canvas.toDataURL('image/png'); link.click();
@@ -2349,7 +2362,7 @@
       btn.textContent = '...'; btn.disabled = true;
       try{
         const card = wrap.querySelector('#receiptCard');
-        const canvas = await html2canvas(card, { backgroundColor: '#FBF7EC', scale: 2 });
+        const canvas = await html2canvas(card, { backgroundColor: '#FFFFFF', scale: 2 });
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         const fileName = nomeArquivoRecibo(entry);
         const shareText = `Recibo ${entry.receiptNumber} — ${entry.nome} — ${fmtBRL(entry.valor)} — ${fmtDateISO(entry.data)}`;
@@ -2363,7 +2376,7 @@
         else{
           try{
             const card = wrap.querySelector('#receiptCard');
-            const canvas = await html2canvas(card, { backgroundColor: '#FBF7EC', scale: 2 });
+            const canvas = await html2canvas(card, { backgroundColor: '#FFFFFF', scale: 2 });
             const link = document.createElement('a');
             link.download = nomeArquivoRecibo(entry);
             link.href = canvas.toDataURL('image/png'); link.click();
@@ -2709,7 +2722,7 @@
         const cards = body.querySelectorAll('#recibosMembroWrap .receipt');
         const nomesUsados = {};
         for(let i = 0; i < cards.length; i++){
-          const canvas = await html2canvas(cards[i], { backgroundColor: '#FBF7EC', scale: 2 });
+          const canvas = await html2canvas(cards[i], { backgroundColor: '#FFFFFF', scale: 2 });
           const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
           let nomeArquivo = nomeArquivoRecibo(listaComDados[i]);
           if(nomesUsados[nomeArquivo]){
