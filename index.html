@@ -538,11 +538,20 @@
   .report-totals .rt-row b{ font-family:'IBM Plex Mono', monospace; color: var(--ink); }
   .report-totals .rt-saldo{ font-weight:700; font-size:15.5px; margin-top:6px; border-top:1px dashed var(--line); padding-top:8px; color: var(--ledger-green-dark); }
 
-  .pdf-export-mode{ font-size: 80% !important; }
-  .pdf-export-mode table{ font-size: 0.85em !important; }
-  .pdf-export-mode .report-title{ font-size: 15px !important; }
-  .pdf-export-mode .report-subtitle{ font-size: 10.5px !important; }
-  .pdf-export-mode th, .pdf-export-mode td{ padding: 5px 6px !important; }
+  .pdf-export-mode{ font-size: 72% !important; }
+  .pdf-export-mode table{ font-size: 0.78em !important; }
+  .pdf-export-mode .report-title{ font-size: 14px !important; margin-bottom: 0 !important; }
+  .pdf-export-mode .report-subtitle{ font-size: 9.5px !important; margin-bottom: 8px !important; }
+  .pdf-export-mode th, .pdf-export-mode td{ padding: 3px 5px !important; line-height: 1.25 !important; }
+  .pdf-export-mode .report h4{ font-size: 10.5px !important; margin: 10px 0 5px !important; }
+  .pdf-export-mode .report-totals{ margin-top: 8px !important; padding-top: 6px !important; }
+  .pdf-export-mode .report-totals .rt-row{ font-size: 10.5px !important; padding: 1px 0 !important; }
+  .pdf-export-mode .report-totals .rt-saldo{ font-size: 12px !important; margin-top: 3px !important; padding-top: 4px !important; }
+  .pdf-export-mode .progress-section{ margin: 4px 0 8px !important; }
+  .pdf-export-mode .progress-block{ margin-bottom: 6px !important; }
+  .pdf-export-mode .progress-label{ font-size: 10px !important; margin-bottom: 2px !important; }
+  .pdf-export-mode .progress-bar-track{ height: 7px !important; }
+  .pdf-export-mode .controle-note{ font-size: 9px !important; margin-top: 5px !important; }
 
   .comp-print-header{ font-family: 'Fraunces', serif; font-size:16px; color: var(--ledger-green-dark); margin-bottom: 14px; }
   .comp-print-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -1559,11 +1568,25 @@
   }
 
   async function excluirMembroNumerado(id){
-    if(!confirm('¿Quitar este miembro de la lista numerada? Esto no borra sus pagos ya registrados.')) return { ok:false };
+    const membro = membrosNumerados.find(m => m.id === id);
+    if(!membro) return { ok:false, msg:'Miembro no encontrado.' };
+    if(!confirm(`¿Eliminar por completo a "${membro.nome}" (Nº ${membro.numero})?\n\nSu nombre se borrará del historial de pagos (las fechas y valores se mantienen, sin identificación). El número ${membro.numero} queda libre para reutilizar en otra persona.\n\nEsta acción no se puede deshacer.`)) return { ok:false };
     try{
+      await anonimizarHistoricoDoMembro(membro.numero);
       await db.collection('membros_numerados').doc(id).delete();
       return { ok:true };
     } catch(err){ return { ok:false, msg:'No se pudo eliminar.' }; }
+  }
+
+  async function anonimizarHistoricoDoMembro(numero){
+    const colecoes = ['caixa_manutencao', 'caixa_aluguel_geral'];
+    for(const col of colecoes){
+      const snap = await db.collection(col).where('numeroMembro', '==', String(numero)).get();
+      for(const doc of snap.docs){
+        await doc.ref.update({ numeroMembro: null });
+        await doc.ref.collection('privado').doc('dados').delete().catch(() => {});
+      }
+    }
   }
 
   async function alternarStatusMembro(id, estaRetirado){
@@ -2276,7 +2299,7 @@
     }
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
-    const margemMm = 10;
+    const margemMm = 8;
     const pageWidthMm = pdf.internal.pageSize.getWidth();
     const pageHeightMm = pdf.internal.pageSize.getHeight();
     const imgWidthMm = pageWidthMm - (margemMm * 2);
